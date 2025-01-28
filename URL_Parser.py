@@ -47,14 +47,17 @@ def parse_html_for_llm(url):
             result.append(f"# Title: {soup.title.string.strip()}\n")
 
         # Process headers (h1, h2, h3, etc.), paragraphs (p), and other relevant tags
+        pretty_text = []
         for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'a']):
             if tag.name.startswith('h'):
                 level = int(tag.name[1])  # Extract header level
                 result.append(f"{'#' * level} {tag.get_text(strip=True)}\n")
+                pretty_text.append(f"{'#' * level} {tag.get_text(strip=True)}\n")
             elif tag.name == 'p':
                 text = tag.get_text(strip=True)
                 if text:  # Avoid empty paragraphs
                     result.append(f"{text}\n")
+                    pretty_text.append(f"{text}\n")
             elif tag.name in ['span', 'a']:
                 text = tag.get_text(strip=True)
                 if text:  # Include non-empty span or link text
@@ -62,7 +65,8 @@ def parse_html_for_llm(url):
 
         # Join the structured content
         to_return = '\n'.join(result)[:23000]
-        return to_return
+        prettier_text = '\n'.join(pretty_text)
+        return [to_return, prettier_text]
 
     except requests.exceptions.RequestException as e:
         st.toast(f"Error fetching the URL: {e}")
@@ -110,6 +114,9 @@ input_url = st.chat_input("Enter a URL for data extraction:")
 if input_url:
     st.chat_message("user").write(input_url)
     with st.spinner("Parsing website url..."):
-        parsed = f"URL: {input_url}\nWebsite text:{parse_html_for_llm(input_url)}"
+        whole_parsed = parse_html_for_llm(input_url)
+        with st.expander("View website text:"):
+            st.write(whole_parsed[1])
+        parsed = f"URL: {input_url}\nWebsite text:{whole_parsed[0]}"
     with st.spinner("Generating summary..."):
         call_llama(parsed)
