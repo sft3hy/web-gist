@@ -3,6 +3,8 @@ from bs4 import BeautifulSoup
 from groq import Groq
 import streamlit as st
 
+CHAR_LIMIT = 70000
+
 st.set_page_config("URL Parser", page_icon=":material/precision_manufacturing:")
 st.title("URL Parser")
 
@@ -67,7 +69,7 @@ def parse_html_for_llm(url):
             #         result.append(f"{text}\n")
 
         # Join the structured content
-        to_return = '\n'.join(result)[:23000]
+        to_return = '\n'.join(result)[:CHAR_LIMIT]
         prettier_text = '\n'.join(pretty_text)
         return [to_return, prettier_text]
 
@@ -85,7 +87,7 @@ cnn_url = "https://www.cnn.com/2025/01/27/politics/trump-special-project-january
 
 client = Groq()
 
-def call_llama(input_soup: str, model_name="llama-3.1-8b-Instant") -> str:
+def call_llama(input_soup: str, model_name="llama3-8b-8192") -> str:
     stream = client.chat.completions.create(
         messages=[
             {
@@ -106,7 +108,7 @@ def call_llama(input_soup: str, model_name="llama-3.1-8b-Instant") -> str:
     print("Prompt Tokens:", stream.usage.prompt_tokens)
     print("Completion Tokens:", stream.usage.completion_tokens)
     
-def clean_article(input_article: str, model_name="llama-3.1-8b-Instant"):
+def clean_article(input_article: str, model_name="llama3-8b-8192"):
     response = client.chat.completions.create(
         messages=[
             {
@@ -134,6 +136,6 @@ if input_url:
         whole_parsed = parse_html_for_llm(input_url)
         parsed = f"URL: {input_url}\nWebsite text:{whole_parsed[0]}"
     with st.spinner("Cleaning website text..."):
-        clean_article(whole_parsed[1])
+        clean_article(whole_parsed[1][:CHAR_LIMIT])
     with st.spinner("Generating summary..."):
         call_llama(parsed)
