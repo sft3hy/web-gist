@@ -6,15 +6,18 @@ import streamlit as st
 st.set_page_config("URL Parser", page_icon=":material/precision_manufacturing:")
 st.title("URL Parser")
 
-sys = """You are a website reader. Your job is to read some given text from a web article and output the title, author,
-publisher or source, and date/time of publishing. If you are not given the web text or get a 401 error, do your best with
-just the URL. If the URL has a date in it, default to using that for your JSON. Output only a clean json of the requested information.
-The json should look like this:
+sys = """You are a web article reader. Extract and output the following information in JSON format from the provided text or URL:
+Title
+Author
+Source/Publisher
+URL
+Date/Time of Publishing
+If the article text is unavailable or a 401 error occurs, infer details from the URL (e.g., extract the date). Output only this JSON format:
 {
     "title": "Example Title",
-    "author": "Example name",
-    "source": "CNN"
-    "url": https://www.example.com/example-article",
+    "author": "Example Name",
+    "source": "Example Source",
+    "url": "https://www.example.com/example-article",
     "published": "01-27-2025 10:03 PM ET"
 }
 """
@@ -81,7 +84,7 @@ def stream_groq(stream):
         if text is not None and type(text) != "int":
             yield text
 
-def call_llama(input_soup: str, model_name="llama-3.1-8b-instant") -> str:
+def call_llama(input_soup: str, model_name="llama-3.1-8b-Instant") -> str:
     stream = client.chat.completions.create(
         messages=[
             {
@@ -107,6 +110,6 @@ input_url = st.chat_input("Enter a URL for data extraction:")
 if input_url:
     st.chat_message("user").write(input_url)
     with st.spinner("Parsing website url..."):
-        parsed = parse_html_for_llm(input_url)
+        parsed = f"URL: {input_url}\nWebsite text:{parse_html_for_llm(input_url)}"
     with st.spinner("Generating summary..."):
         call_llama(parsed)
