@@ -63,10 +63,10 @@ def parse_html_for_llm(url):
                 if text:  # Avoid empty paragraphs
                     result.append(f"{text}\n")
                     pretty_text.append(f"{text}\n")
-            # elif tag.name in ['span', 'a']:
-            #     text = tag.get_text(strip=True)
-            #     if text:  # Include non-empty span or link text
-            #         result.append(f"{text}\n")
+            elif tag.name in ['span', 'a']:
+                text = tag.get_text(strip=True)
+                if text:  # Include non-empty span or link text
+                    result.append(f"{text}\n")
 
         # Join the structured content
         to_return = '\n'.join(result)[:CHAR_LIMIT]
