@@ -66,7 +66,7 @@ def parse_html_for_llm(url):
             elif tag.name in ['span', 'a']:
                 text = tag.get_text(strip=True)
                 if text:  # Include non-empty span or link text
-                    result.append(f"{text}\n")
+                    result.append(f"{text}\n") 
 
         # Join the structured content
         to_return = '\n'.join(result)[:CHAR_LIMIT]
