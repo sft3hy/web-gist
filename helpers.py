@@ -1,93 +1,59 @@
 import requests
-import requests
 from bs4 import BeautifulSoup
 from groq import Groq
+import json
 from config import CHAR_LIMIT
+from scraper_utils import parse_html_for_llm
 
 TOTAL_TOKENS = 0
 
-sys = """You are a web article reader. Extract and output the following information in JSON format from the provided text or URL:
+sys = """
+You are a structured web article parser. Your task is to extract only the following fields from the provided article text or URL and return them in strict JSON format:
 
-- Title
-- Author
-- Source/Publisher
-- URL
-- Date/Time of Publishing
+- "title": The main title of the article.
+- "author": The full name of the article’s author (leave blank if unknown).
+- "source": The publisher or website name.
+- "url": The full URL of the article.
+- "published": The original date and time the article was published.
+- "updated": The most recent date and time the article was updated.
 
-If the article text is unavailable or a 401 error occurs, infer details from the URL (e.g., extract the date). Output only this JSON format:
+If only one date is available, use it for both "published" and "updated".
 
+⚠️ IMPORTANT:
+- DO NOT make up or hallucinate any data.
+- Leave fields blank if the information is not explicitly available.
+- Use the format *exactly*: MM/DD/YYYY HH:MM (24-hour time).
+- If multiple dates are present, always use the earliest one as "published" and the latest one as "updated".
+
+✅ Return only a JSON object. Do not include any commentary, explanation, or extra text.
+
+Example Output:
 {
-    "title": "Example Title",
-    "author": "Example Name",
-    "source": "Example Source",
-    "url": "https://www.example.com/example-article",
-    "published": "01/27/2025 10:03"
+  "title": "Example Headline",
+  "author": "Jane Doe",
+  "source": "Example News",
+  "url": "https://www.example.com/example-article",
+  "published": "04/16/2025 09:28",
+  "updated": "04/17/2025 04:40"
 }
-
-⚠️ DO NOT MAKE UP ANY DATA FOR THE JSON.  
-🗓 For the "published" field, use the exact format: MM/DD/YYYY HH:MM (e.g., 04/17/2025 14:30).  
-This format ensures compatibility with Excel date parsing.
-
 """
 
-cleanup_sys = """You are a website text editor. You will remove extra content at the bottom and top of
-an article that does not have to do with the article, and just return the one main article body without editing its content. The main article will be the longest text about one topic."""
+cleanup_sys = """You are a content cleaner for online articles. Your task is to isolate and return only the main article body from a web page.
 
-def parse_html_for_llm(url):
-    print('parsing html')
-    try:
-        # Define headers to mimic a browser request
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
-            )
-        }
+Instructions:
+- Remove any unrelated content at the beginning or end, such as:
+  - Navigation bars
+  - Promotional sections
+  - Author bios
+  - Related articles
+  - Newsletter prompts
+  - Footers or comment sections
+- Do NOT edit or rewrite the article content.
+- Only return the main body of the article, focused on a single topic or story.
+- The main body will usually be the longest continuous block of coherent text.
 
-        # Fetch the webpage content with a timeout
-        response = requests.get(url, headers=headers, timeout=3)
-        response.raise_for_status()  # Raise an exception for HTTP errors
-
-        # Parse the HTML using BeautifulSoup
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Extract and clean text, keeping it structured
-        result = []
-
-        # Add the title of the page if available
-        if soup.title and soup.title.string:
-            result.append(f"# Title: {soup.title.string.strip()}\n")
-
-        # Process headers and paragraphs
-        pretty_text = []
-        for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p']):
-            if tag.name.startswith('h'):
-                level = int(tag.name[1])
-                result.append(f"{'#' * level} {tag.get_text(strip=True)}\n")
-                pretty_text.append(f"{'#' * level} {tag.get_text(strip=True)}\n")
-            elif tag.name == 'p':
-                text = tag.get_text(strip=True)
-                if text:
-                    result.append(f"{text}\n")
-                    pretty_text.append(f"{text}\n")
-
-        # Join and limit content
-        to_return = '\n'.join(result)[:CHAR_LIMIT]
-        prettier_text = '\n'.join(pretty_text)
-        # print('ARITCLE:')
-        # print(to_return)
-        # print([to_return, prettier_text])
-        return [to_return, prettier_text]
-
-    except requests.exceptions.Timeout:
-        print("Request timed out after 3 seconds.")
-        return None
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching the URL: {e}")
-        return None
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return None
+Return the article body as plain text with no additional commentary.
+"""
     
 ap_url = "https://apnews.com/live/trump-presidency-day-8-updates"
 fox_url = "https://www.foxnews.com/politics/one-bill-two-bills-i-dont-care-trump-promises-get-large-reconciliation-bill-passed-either-way"
@@ -97,7 +63,6 @@ cnn_url = "https://www.cnn.com/2025/01/27/politics/trump-special-project-january
 client = Groq()
 
 def call_llm(input_soup: str, model_name="llama-3.1-8b-instant") -> str:
-    print('getting article info from url')
     stream = client.chat.completions.create(
         messages=[
             {

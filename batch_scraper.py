@@ -3,8 +3,9 @@ import re
 import json
 import time
 from collections import deque
-from helpers import call_llm, parse_html_for_llm, clean_article
-from config import CHAR_LIMIT
+from helpers import call_llm, clean_article
+from scraper_utils import parse_html_for_llm
+from config import CHAR_LIMIT, BEGIN_ROW, END_ROW
 
 # naughty = ['news.afp.com', 'reuters.com']
 
@@ -57,11 +58,11 @@ for row in rows:
         urls.append(row)
 
 count = 1
-with open('Parsed_links.csv', 'w', newline='') as f:
+with open(f'Parsed_links{BEGIN_ROW}-{END_ROW}.csv', 'w', newline='') as f:
     writer = csv.writer(f)
-    writer.writerow(['URL', 'article_text', 'title', 'author', 'source', 'published_date'])
+    writer.writerow(['URL', 'article_text', 'title', 'author', 'source', 'published_date', 'updated_date'])
 
-    for url in urls[:20]:
+    for url in urls[BEGIN_ROW:END_ROW]:
         print('processing article', count)
         count += 1
 
@@ -69,9 +70,6 @@ with open('Parsed_links.csv', 'w', newline='') as f:
             print('writing blank row')
             writer.writerow(['', '', '', '', '', ''])
             continue
-
-        # if any(n in url for n in naughty):
-        #     continue
 
         parsed = f'URL: {url}\n'
         article_text = ''
@@ -81,8 +79,11 @@ with open('Parsed_links.csv', 'w', newline='') as f:
         published_date = ''
 
         whole_parsed = parse_html_for_llm(url)
-        if whole_parsed:
-            parsed += f"Website text:{whole_parsed[0]}"
+        # for item in whole_parsed:
+        #     print(item)
+        #     print()
+        if whole_parsed is not None and whole_parsed[1] != '':
+            parsed += f"URL: {url}\nWebsite text:{whole_parsed[0]}"
             raw_text = whole_parsed[1][:CHAR_LIMIT]
 
             # Throttle for GEMMA (used in clean_article)
@@ -90,26 +91,29 @@ with open('Parsed_links.csv', 'w', newline='') as f:
             throttle_model(gemma_requests, gemma_tokens, GEMMA_REQ_PER_MIN, GEMMA_TOK_PER_MIN, gemma_tok)
             article_text = clean_article(raw_text)
 
-            # Throttle for LLAMA (used in call_llm)
-            llama_tok = estimate_tokens(parsed)
-            throttle_model(llama_requests, llama_tokens, LLAMA_REQ_PER_MIN, LLAMA_TOK_PER_MIN, llama_tok)
+        # Throttle for LLAMA (used in call_llm)
+        llama_tok = estimate_tokens(parsed)
+        throttle_model(llama_requests, llama_tokens, LLAMA_REQ_PER_MIN, LLAMA_TOK_PER_MIN, llama_tok)
 
-            try:
-                article_json = json.loads(call_llm(parsed))
-                for key, value in article_json.items():
-                    if key == 'title':
-                        title = value
-                    elif key == 'author':
-                        author = value
-                    elif key == 'source':
-                        source = value
-                    elif key == 'published':
-                        published_date = value
-            except (json.JSONDecodeError, TypeError) as e:
-                print(f"Error decoding JSON or processing data for URL: {url} - {e}")
-            except Exception as e:
-                print(f"General error processing URL: {url} - {e}")
+        try:
+            article_json = json.loads(call_llm(parsed))
+            for key, value in article_json.items():
+                if key == 'title':
+                    title = value
+                elif key == 'author':
+                    author = value
+                elif key == 'source':
+                    source = value
+                elif key == 'published':
+                    published_date = value
+                elif key == 'updated':
+                    updated_date = value
 
-        writer.writerow([url, article_text, title, author, source, published_date])
+        except (json.JSONDecodeError, TypeError) as e:
+            print(f"Error decoding JSON or processing data for URL: {url} - {e}")
+        except Exception as e:
+            print(f"General error processing URL: {url} - {e}")
+
+        writer.writerow([url, article_text, title, author, source, published_date, updated_date])
 
 print("Processing complete.")
