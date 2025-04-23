@@ -1,3 +1,5 @@
 CHAR_LIMIT = 20000
 BEGIN_ROW = 0
-END_ROW = 14
+END_ROW = 20
+HTML_MODEL = "gemini-2.0-flash-lite"
+JSONLD_MODEL = "llama3-70b-8192"

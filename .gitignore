@@ -1,1 +1,3 @@
 .vscode
+__pycache__
+html_dumps

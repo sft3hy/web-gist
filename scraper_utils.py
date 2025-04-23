@@ -8,6 +8,8 @@ from config import CHAR_LIMIT
 
 def get_source_from_url(url):
     domain = urlparse(url).netloc.lower()
+    if '.' in domain:
+        print(domain.split('.')[1])
     if "reuters" in domain:
         return "reuters"
     elif "apnews" in domain:
@@ -147,7 +149,8 @@ def parse_html_for_llm(url):
                     "span[class*=date]",
                     "span[class*=published]",
                     "span[class*='date-line__date']",
-                    "span.txt"
+                    "span.txt",
+                    "span[class*='dcr-u0h1qy']",
                 ],
                 "updated": [
                     "meta[property='article:modified_time']",
@@ -253,3 +256,6 @@ def parse_html_for_llm(url):
     except Exception as e:
         print("Error parsing HTML:", e)
         return ["", ""]
+
+for url in open("Links.txt", 'r').readlines():
+    get_source_from_url(url)
