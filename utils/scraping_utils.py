@@ -2,6 +2,7 @@ import random
 import time
 from playwright.sync_api import sync_playwright, Route
 from playwright_stealth import stealth_sync
+import re
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -23,6 +24,49 @@ EXTRA_HEADERS = {
     "Referer": "https://www.google.com/",
     "Connection": "keep-alive",
 }
+
+
+def remove_paths_and_urls(html_string: str) -> str:
+    """
+    Uses regex to remove '<div', '<span', URLs, and common file path patterns
+    (case-insensitive for tags).
+
+    WARNING: This is a brittle approach using regex directly on HTML. It will
+             likely result in invalid/broken HTML structure and may remove
+             unintended text that resembles a URL or path. Use with caution.
+
+    Args:
+        html_string: The HTML content as a string.
+
+    Returns:
+        The modified string.
+    """
+    # 1. Pattern for URLs/URIs (common web protocols, protocol-relative, www.)
+    # Designed to match typical structures found in attributes like href or src.
+    url_patterns = r"""
+        (?:https?|ftp|file):\/\/[\-A-Z0-9+&@#\/%?=~_|!:,.;]*[\-A-Z0-9+&@#\/%=~_|]  # http, https, ftp, file
+        |
+        \/\/[^\s<>"']+  # Protocol-relative //...
+        |
+        (?<!\w)www\.[^\s<>"']+ # www. links (negative lookbehind to avoid matching things like 'abcwww.')
+    """
+
+    # 2. Pattern for common file paths (Unix/Windows style, relative/absolute)
+    # Matches starting patterns like /, ./, ../, C:\ followed by typical path characters.
+    path_patterns = r"""
+        (?:[a-zA-Z]:\\|\.\.?[\\\/]|\/)[a-zA-Z0-9\/\\._-]+ # Drive paths, relative paths, absolute paths
+    """
+
+    # Combine patterns with OR (|). Order: URLs, Paths, Tags. Use verbose regex for readability.
+    combined_pattern = re.compile(
+        f"({url_patterns})|({path_patterns})",
+        re.IGNORECASE | re.VERBOSE,
+    )
+
+    # Perform the substitution, replacing any match with an empty string
+    cleaned_html = combined_pattern.sub("", html_string)
+
+    return cleaned_html
 
 
 def scrape_site(url, proxies=None, max_retries=3):

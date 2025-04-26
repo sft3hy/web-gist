@@ -1,4 +1,5 @@
 import os
+import re
 
 
 def count_files_with_ld_json(directory="html_dumps"):
@@ -90,3 +91,50 @@ def get_naughty_links():
 
     with open("links_that_dont_work.txt", "w") as f:
         f.write(just_base_urls.strip())
+
+
+def remove_pahts_and_urls(html_string: str) -> str:
+    """
+    Uses regex to remove '<div', '<span', URLs, and common file path patterns
+    (case-insensitive for tags).
+
+    WARNING: This is a brittle approach using regex directly on HTML. It will
+             likely result in invalid/broken HTML structure and may remove
+             unintended text that resembles a URL or path. Use with caution.
+
+    Args:
+        html_string: The HTML content as a string.
+
+    Returns:
+        The modified string.
+    """
+    # 1. Pattern for URLs/URIs (common web protocols, protocol-relative, www.)
+    # Designed to match typical structures found in attributes like href or src.
+    url_patterns = r"""
+        (?:https?|ftp|file):\/\/[\-A-Z0-9+&@#\/%?=~_|!:,.;]*[\-A-Z0-9+&@#\/%=~_|]  # http, https, ftp, file
+        |
+        \/\/[^\s<>"']+  # Protocol-relative //...
+        |
+        (?<!\w)www\.[^\s<>"']+ # www. links (negative lookbehind to avoid matching things like 'abcwww.')
+    """
+
+    # 2. Pattern for common file paths (Unix/Windows style, relative/absolute)
+    # Matches starting patterns like /, ./, ../, C:\ followed by typical path characters.
+    path_patterns = r"""
+        (?:[a-zA-Z]:\\|\.\.?[\\\/]|\/)[a-zA-Z0-9\/\\._-]+ # Drive paths, relative paths, absolute paths
+    """
+
+    # Combine patterns with OR (|). Order: URLs, Paths, Tags. Use verbose regex for readability.
+    combined_pattern = re.compile(
+        f"({url_patterns})|({path_patterns})",
+        re.IGNORECASE | re.VERBOSE,
+    )
+
+    # Perform the substitution, replacing any match with an empty string
+    cleaned_html = combined_pattern.sub("", html_string)
+
+    return cleaned_html
+
+
+with open("sample.html", "r") as f:
+    print(remove_pahts_and_urls(f.read()))
