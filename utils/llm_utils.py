@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from groq import Groq
 import json
 import os
-from config import HTML_MODEL, JSONLD_MODEL, URL_MODEL, VISIBLE_TEXT_MODEL
+from config import GEMINI_MODEL, GROQ_PARSER_MODEL, URL_MODEL, VISIBLE_TEXT_MODEL
 from google.genai import types
 
 
@@ -123,7 +123,7 @@ def create_cache():
     # Create a cache with a 1 hour TTL
     print("creating cached system prompt")
     cache = gemini_client.caches.create(
-        model=HTML_MODEL,
+        model=GEMINI_MODEL,
         config=types.CreateCachedContentConfig(
             display_name="Long html sys prompt",  # used to identify the cache
             system_instruction=(html_parser_sys_prompt),
@@ -138,9 +138,9 @@ def create_cache():
 
 
 def gemini_parse_web_content(input_dict: str):
-    print(f"parsing web content with {HTML_MODEL}")
+    print(f"parsing web content with {GEMINI_MODEL}")
     response = gemini_client.models.generate_content(
-        model=HTML_MODEL,
+        model=GEMINI_MODEL,
         contents=input_dict,
         config={
             "response_mime_type": "application/json",
@@ -156,31 +156,6 @@ def gemini_parse_web_content(input_dict: str):
 # html_string = open("html_dumps/chosun_com_20250423_145233.html", "r").read()
 # info = gemini_parse_html(str(html_string))
 # print(info)
-
-
-groq_cleaner_sys_prompt = """
-You are a data extractor. Given a dict with:
-- url: article URL
-- ld_json_list: list of NewsArticle JSON-LD blocks
-- article_text: optional raw <p> text
-
-Return a JSON object with:
-{
-  "title": str,             # From "headline" or "name"
-  "authors": str,           # From "author"/"creator" (comma-separated)
-  "source": str,            # From "publisher"/"copyrightHolder"
-  "article_text": str,      # Prefer "articleBody"; fallback to provided text
-  "published_date": str,    # From "datePublished", in ISO 8601 ET
-  "updated_date": str       # From "dateModified" or same as published_date, ISO 8601 ET
-}
-
-Instructions:
-- Pick the most relevant NewsArticle object
-- Prefer most complete values
-- Convert all dates to Eastern Time (assume UTC if tz unknown)
-- If a field is truly missing, use ""
-- Output only the final JSON, no comments
-"""
 
 
 groq_client = Groq()

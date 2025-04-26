@@ -3,23 +3,20 @@ import requests
 from bs4 import BeautifulSoup
 import re
 from collections import deque
-from bs4.element import Comment
-import urllib.request
 import time
 import csv
 import random
-from playwright.sync_api import sync_playwright
+from utils.scraping_utils import scrape_site
 
 from config import (
     BEGIN_ROW,
     END_ROW,
-    HTML_MODEL,
+    GEMINI_MODEL,
     VISIBLE_TEXT_MODEL,
     URL_MODEL,
 )
 from utils.llm_utils import (
     gemini_parse_web_content,
-    groq_parse_dict,
     groq_parse_url,
     groq_parse_visible_text,
 )
@@ -98,7 +95,7 @@ with open("representative_links.txt", "w") as out_file:
 print(f"Extracted {len(representative_urls)} unique full URLs.")
 
 
-urls = representative_urls
+urls = representative_urls[BEGIN_ROW:END_ROW]
 
 # urls = []
 # rows = open("Links.txt", "r").read().split("\n")[1:]
@@ -113,169 +110,144 @@ urls = representative_urls
 
 # urls = urls[BEGIN_ROW:END_ROW]
 
-# === User-Agent headers ===
-
-user_agents = [
-    # Windows - Chrome
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.86 Safari/537.36",
-    # Windows - Firefox
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
-    # Windows - Edge
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.86 Safari/537.36 Edg/123.0.2420.65",
-    # macOS - Chrome
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.129 Safari/537.36",
-    # macOS - Safari
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
-    # macOS - Firefox
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:124.0) Gecko/20100101 Firefox/124.0",
-    # iOS - Safari (iPhone)
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
-    # Android - Chrome (Pixel)
-    "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.129 Mobile Safari/537.36",
-    # Android - Samsung Browser
-    "Mozilla/5.0 (Linux; Android 14; SAMSUNG SM-G991U) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/122.0.6261.129 Mobile Safari/537.36",
-    # Linux - Firefox
-    "Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0",
-]
-
-headers = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
-    "Accept": (
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
-    ),
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Referer": "https://www.google.com/",
-}
+naughty_links = open("new_naughty_links.txt", "r").read().split("\n")
+naughty_links = [link.strip() for link in naughty_links if link.strip()]
 
 
-def tag_visible(element):
-    if element.parent.name in [
-        "style",
-        "script",
-        "head",
-        "title",
-        "meta",
-        "[document]",
-    ]:
-        return False
-    if isinstance(element, Comment):
-        return False
-    return True
+def get_naughty_links():
+    just_base_urls = []
+    for link in naughty_links:
+        splitted = link.split("/")
+        tmp_text = "/".join(splitted[:3])  # Join first 3 parts with slashes
+        just_base_urls.append(tmp_text)
+
+    return just_base_urls
 
 
-def text_from_html(body):
-    soup = BeautifulSoup(body, "html.parser")
-    texts = soup.find_all(string=True)
-    visible_texts = filter(tag_visible, texts)
-    raw_text = " ".join(t.strip() for t in visible_texts)
-    clean_text = re.sub(
-        r"\s+", " ", raw_text
-    )  # Replace all whitespace (tabs, newlines, etc.) with a single space
-    return clean_text.strip()
+final_naughty_links = get_naughty_links()
 
 
-count = 1
-with open(f"Parsed_links{BEGIN_ROW}-{END_ROW}.csv", "w", newline="") as f:
-    writer = csv.writer(f)
+def call_groq(writer, url):
+    parsed_dict = groq_parse_url(url)
+    llm = URL_MODEL
     writer.writerow(
         [
-            "URL",
-            "article_text",
-            "title",
-            "author",
-            "source",
-            "published_date",
-            "updated_date",
-            "LLM",
+            url,
+            parsed_dict.article_text,
+            parsed_dict.title,
+            parsed_dict.authors,
+            parsed_dict.source,
+            parsed_dict.published_date,
+            parsed_dict.updated_date,
+            llm,
         ]
     )
-    all_text = ""
-    for i, url in enumerate(urls, 1):
-        # headers["User-Agent"] = random.choice(user_agents)
-        print(f"[{i}/{len(urls)}] Fetching: {url}")
-        # Small delay to avoid getting blocked
-        time.sleep(random.randint(2, 4))
-        try:
-            if url == "":
-                print("writing blank row")
-                writer.writerow(["", "", "", "", "", ""])
-                continue
-            session = requests.Session()
-            session.headers.update(headers)
-            response = session.get(url, timeout=8)
-            response.raise_for_status()
-
-            json_ld_try = extract_ld_json_and_article(response.text)
-
-            gemma_tok = estimate_tokens(str(json_ld_try))
-
-            parsed_dict = {}
-            llm = ""
-
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                page = browser.new_page()
-                page.set_default_timeout(8000)  # timeout in milliseconds (10 seconds)
-                page.goto(url)
-                html = page.content()
-                browser.close()
-            # html = urllib.request.urlopen(url)
-            soup = BeautifulSoup(html, "html.parser")
-
-            # Remove noisy elements to reduce token count
-            for tag in soup(
-                ["script", "style", "nav", "footer", "aside", "noscript", "iframe"]
-            ):
-                tag.decompose()
-
-            # Optionally keep only relevant top-level sections (e.g. <article>, <main>, etc.)
-            # You could also consider extracting just these elements instead of cleaning in-place
-            main_content = soup.find("article") or soup.find("main") or soup.body
-
-            # If found, keep only the main content; else fallback to the cleaned soup
-            if main_content:
-                cleaned_html = str(main_content)
-            else:
-                cleaned_html = str(soup)
-
-            pass_dict = {"URL": url}
-            if json_ld_try is not None:
-                pass_dict["json_ld"] = json_ld_try
-            pass_dict["raw_html"] = cleaned_html
-            llm = HTML_MODEL
-            parsed_dict = gemini_parse_web_content(str(pass_dict))
-            # print(pass_dict)
-            writer.writerow(
-                [
-                    url,
-                    parsed_dict.article_text,
-                    parsed_dict.title,
-                    parsed_dict.authors,
-                    parsed_dict.source,
-                    parsed_dict.published_date,
-                    parsed_dict.updated_date,
-                    llm,
-                ]
-            )
-        except Exception as e:
-            print(f"Error fetching {url}: {e}")
-            parsed_dict = groq_parse_url(url)
-            llm = URL_MODEL
-            writer.writerow(
-                [
-                    url,
-                    parsed_dict.article_text,
-                    parsed_dict.title,
-                    parsed_dict.authors,
-                    parsed_dict.source,
-                    parsed_dict.published_date,
-                    parsed_dict.updated_date,
-                    llm,
-                ]
-            )
 
 
+def strip_tags(text: str) -> str:
+    return re.sub(r"<[^>]+>", "", text)
+
+
+def do_the_scraping():
+    with open(f"Parsed_links{BEGIN_ROW}-{END_ROW}.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            [
+                "URL",
+                "article_text",
+                "title",
+                "author",
+                "source",
+                "published_date",
+                "updated_date",
+                "LLM",
+            ]
+        )
+        for i, url in enumerate(urls, 1):
+            link_is_good = True
+            # headers["User-Agent"] = random.choice(user_agents)
+            print(f"[{i}/{len(urls)}] Fetching: {url}")
+            # Small delay to avoid getting blocked
+            time.sleep(random.randint(1, 4))
+
+            try:
+                if url == "":
+                    print("writing blank row")
+                    writer.writerow(["", "", "", "", "", ""])
+                    continue
+                # pre processed and found these links don't work - we don't need to try to scrape them
+                # just pass to groq to infer info from URL
+                for link in final_naughty_links:
+                    if link in url:
+                        print("link did not pass vibe check")
+                        # call_groq(writer=writer, url=url)
+                        link_is_good = False
+
+                parsed_dict = {}
+                llm = GEMINI_MODEL
+                if link_is_good:
+                    print("link passed the vibe check")
+                    html = scrape_site(url)
+
+                    soup = BeautifulSoup(html, "html.parser")
+
+                    json_ld_try = extract_ld_json_and_article(soup)
+
+                    # Remove noisy elements to reduce token count
+                    for tag in soup(
+                        [
+                            "script",
+                            "style",
+                            "nav",
+                            "footer",
+                            "aside",
+                            "noscript",
+                            "iframe",
+                        ]
+                    ):
+                        tag.decompose()
+
+                    # Optionally keep only relevant top-level sections (e.g. <article>, <main>, etc.)
+                    # You could also consider extracting just these elements instead of cleaning in-place
+                    main_content = (
+                        soup.find("article") or soup.find("main") or soup.body
+                    )
+
+                    # soup = strip_tags(str(soup))
+
+                    # If found, keep only the main content; else fallback to the cleaned soup
+                    if main_content:
+                        print("found main_content")
+                        cleaned_html = str(
+                            main_content
+                        )  # strip_tags(str(main_content))
+                    else:
+                        cleaned_html = str(soup)
+                    with open("sample.html", "w") as f:
+                        f.write(str(cleaned_html))
+                    pass_dict = {"URL": url}
+                    if json_ld_try is not None:
+                        pass_dict["json_ld"] = json_ld_try
+                    pass_dict["raw_html"] = cleaned_html
+
+                    print("token estimate of pass_dict:", len(str(pass_dict)) / 4)
+                    # parsed_dict = gemini_parse_web_content(str(pass_dict))
+                    # writer.writerow(
+                    #     [
+                    #         url,
+                    #         parsed_dict.article_text,
+                    #         parsed_dict.title,
+                    #         parsed_dict.authors,
+                    #         parsed_dict.source,
+                    #         parsed_dict.published_date,
+                    #         parsed_dict.updated_date,
+                    #         llm,
+                    #     ]
+                    # )
+            except Exception as e:
+                print(f"Error fetching {url}: {e}")
+                # call_groq(writer=writer, url=url)
+
+
+do_the_scraping()
 print("\n🎉 Done!")

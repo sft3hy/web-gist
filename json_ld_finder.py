@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 from parsers.text_scrubber import scrub_text
 
 
-def extract_ld_json_and_article(html: str):
+def extract_ld_json_and_article(soup):
     """
     Extracts the first JSON-LD (application/ld+json) script and the full article text from <p> tags.
 
@@ -15,7 +15,6 @@ def extract_ld_json_and_article(html: str):
               - 'ld_json': Parsed JSON-LD data or None
               - 'article_text': Concatenated text from all <p> tags
     """
-    soup = BeautifulSoup(html, "html.parser")
 
     # Extract the first ld+json script
     script_tags = soup.find_all("script", type="application/ld+json")

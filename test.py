@@ -23,10 +23,70 @@ def count_files_with_ld_json(directory="html_dumps"):
 
 
 # Run the function
-count_files_with_ld_json()
+# count_files_with_ld_json()
 
 
-sample = {
-    "URL": "https://www.politico.eu/article/britains-starmer-suspends-tariffs-on-89-products-amid-trumps-trade-war/",
-    "raw_html": '<article class="article">\n<div class="sidebar-grid sidebar-grid--is-narrow">\n<div class="sidebar-grid__container">\n<header class="sidebar-grid__header article__header">\n\n<div class="hero article__hero">\n<h1 class="hero__title">\n\t\t\t\tUK suspends some tariffs to help firms cope with Trump’s trade war\t\t\t</h1>\n<p class="hero__excerpt">\n\t\t\t\tSuspension of import duties on a range of 89 products extends to mid-2027. \t\t\t</p>\n<div class="hero__actions">\n\n</div>\n<div class="hero__media">\n<figure>\n<img alt="His Majesty The King, The Prime Minister and The Deputy Prime Minister Visit Newquay" class="" decoding="async" fetchpriority="high" height="643" loading="eager" pinger-seen="true" role="" sizes="(max-width: 965px) 100vw, 965px" src="https://www.politico.eu/cdn-cgi/image/width=1160,height=773,quality=80,onerror=redirect,format=auto/wp-content/uploads/2025/04/13/GettyImages-2198714967-scaled.jpg" srcset="https://www.politico.eu/cdn-cgi/image/width=480,quality=80,onerror=redirect,format=auto/wp-content/uploads/2025/04/13/GettyImages-2198714967-scaled.jpg 480w, https://www.politico.eu/cdn-cgi/image/width=768,quality=80,onerror=redirect,format=auto/wp-content/uploads/2025/04/13/GettyImages-2198714967-scaled.jpg 768w, https://www.politico.eu/cdn-cgi/image/width=1024,quality=80,onerror=redirect,format=auto/wp-content/uploads/2025/04/13/GettyImages-2198714967-scaled.jpg 1024w, https://www.politico.eu/cdn-cgi/image/width=1280,quality=80,onerror=redirect,format=auto/wp-content/uploads/2025/04/13/GettyImages-2198714967-scaled.jpg 1280w, https://www.politico.eu/cdn-cgi/image/width=1440,quality=80,onerror=redirect,format=auto/wp-content/uploads/2025/04/13/GettyImages-2198714967-scaled.jpg 1440w, https://www.politico.eu/cdn-cgi/image/width=1920,quality=80,onerror=redirect,format=auto/wp-content/uploads/2025/04/13/GettyImages-2198714967-scaled.jpg 1920w, https://www.politico.eu/cdn-cgi/image/width=2640,quality=80,onerror=redirect,format=auto/wp-content/uploads/2025/04/13/GettyImages-2198714967-scaled.jpg 2640w" width="965"/>\n<figcaption>\n<div class="figcaption__inner">\n\t\t\t\t\t\tStarmer has said the U.K. will “keep calm and fight for the best deal with the U.S.” while also working with other countries to reduce trade barriers. | Leon Neal/Getty Images\t\t\t\t\t</div>\n</figcaption>\n</figure>\n</div>\n<div class="article-meta">\n<div class="articla-meta__datetime-duration">\n<div class="date-time article-meta__date-time before-title">\n<span class="date-time__date">\n\t\t\tApril 13, 2025\t\t</span>\n<span class="date-time__time">\n\t\t\t12:48 pm CET\t\t</span>\n</div>\n</div>\n<div class="authors article-meta__authors">\n\t\n\tBy \n\t\t\t<a href="https://www.politico.eu/author/eliza-gkritsi/">\n\t\t\tEliza Gkritsi\t\t</a>\n</div>\n</div>\n</div>\n</header>\n<div class="sidebar-grid__content article__content">\n<p>United Kingdom Prime Minister Keir Starmer is suspending tariffs on 89 products in order to ease pressure on companies affected by Washington\'s trade war.</p>\n<p>The <a data-id="https://www.gov.uk/government/news/government-cuts-price-of-everyday-items-and-summer-essentials?utm_medium=email&amp;utm_campaign=govuk-notifications-topic&amp;utm_source=a6c82ff1-2743-45b2-b2f6-c860a50da430&amp;utm_content=immediately" data-type="link" href="https://www.gov.uk/government/news/government-cuts-price-of-everyday-items-and-summer-essentials?utm_medium=email&amp;utm_campaign=govuk-notifications-topic&amp;utm_source=a6c82ff1-2743-45b2-b2f6-c860a50da430&amp;utm_content=immediately" target="_blank">suspension of tariffs</a> on a range of products from electric vehicle batteries to agave syrup extends until July 2027, the government said in <a data-id="https://www.gov.uk/government/news/government-cuts-price-of-everyday-items-and-summer-essentials?utm_medium=email&amp;utm_campaign=govuk-notifications-topic&amp;utm_source=a6c82ff1-2743-45b2-b2f6-c860a50da430&amp;utm_content=immediately" data-type="link" href="https://www.gov.uk/government/news/government-cuts-price-of-everyday-items-and-summer-essentials?utm_medium=email&amp;utm_campaign=govuk-notifications-topic&amp;utm_source=a6c82ff1-2743-45b2-b2f6-c860a50da430&amp;utm_content=immediately" target="_blank">a statement</a>.</p>\n<p>The move is part of a wider drive to protect British firms from United States President Donald Trump\'s tariffs, including an increase in state-backed loans for companies, the Telegraph <a href="https://www.telegraph.co.uk/politics/2025/04/12/starmer-suspends-import-tariffs-help-firms-survive-trump/" target="_blank">reported</a>.</p>\n</div></div><div class="ad full-bleed ad__instory-1"><!-- AD UNIT Instory-1 -->\n<span class="ad-label">Advertisement</span>\n<div class="ad-wrapper">\n<div class="ad-inner">\n<div id="instory-1">\n</div>\n</div>\n</div></div><div class="sidebar-grid__container"><div class="sidebar-grid__content article__content">\n<p>The British government claims the initiative will save U.K. businesses £17 million, which could be passed on to consumers.</p>\n<p>The U.K. was <a href="https://commonslibrary.parliament.uk/research-briefings/cbp-10240/" target="_blank">slammed</a> with 10 percent U.S. tariffs across the board on April 2, on top of 25 percent duties on aluminum, steel, vehicles and car parts.</p>\n<p>On Saturday, the House of Lords approved emergency legislation giving the government the power to bring the last remaining source of virgin steel in the U.K., <a data-id="https://www.politico.eu/article/britains-mps-vote-to-take-control-of-british-steel/" data-type="link" href="https://www.politico.eu/article/britains-mps-vote-to-take-control-of-british-steel/">British Steel</a>, under state control. The U.S. is the <a href="https://www.uksteel.org/steel-news-2025/us-25-tariffs-on-uk-steel-imports-come-into-effect" target="_blank">second-most important export market</a> for British steel after the European Union.</p>\n<p>Starmer has <a href="https://pro.politico.eu/news/197055" target="_blank">said</a> the U.K. will “keep calm and fight for the best deal with the U.S.” while also working with other countries to reduce trade barriers.</p>\n<p>Under the tariff plan announced Sunday, the products that will now face zero import duties when entering the U.K. also include pasta, canned pineapples, fruit juice, coconut oil, plywood and plastics.</p>\n</div>\n\n</div>\n</div>\n\n</article>',
-}
+sample = """https://apnews.com/article/iran-us-nuclear-talks-iaea-zarif-tehran-c3a8afc699c670300b9521f1e2019ef7
+https://www.cbc.ca/news/politics/carney-trump-no-call-election-1.7491734
+https://www.excelsior.com.mx/nacional/operacion-frontera-da-resultados-positivos-en-2-dias-de-operativos/1698767
+https://www.devdiscourse.com/article/business/3249768-faas-critical-messaging-system-back-online-after-outage
+https://asia.nikkei.com/Economy/China-GDP-grows-5.4-in-first-quarter-as-tariff-war-darkens-outlook
+https://www.securityweek.com/china-admitted-to-us-that-it-conducted-volt-typhoon-attacks-report/
+https://timesofindia.indiatimes.com/business/india-business/india-new-zealand-to-restart-fta-talks-after-a-10-year-gap/articleshow/119085808.cms
+https://www.themoscowtimes.com/2025/02/13/why-are-we-handing-russia-what-it-wants-eus-chief-diplomat-blasts-us-over-ukraine-a87993
+https://www.wsls.com/weather/2025/02/15/flash-flood-warning-for-portions-of-southwest-virginia-through-1045-pm/
+https://balkaninsight.com/2025/02/20/montenegro-parliament-to-probe-decades-of-attacks-on-journalists/
+https://www.washingtonhttps://apnews.com/article/pakistan-bannu-explosion-suicide-bombers-10efba049007e483270ba1225973438epost.com/world/2025/03/04/pakistan-bannu-explosion-suicide-bombers/15be6924-f909-11ef-bbd0-5841f0ec1418_story.html
+https://www.axios.com/2025/03/09/us-trump-israel-hamas-gaza-talks
+https://www.plenglish.com/news/2025/03/21/nicaragua-foreign-investment-exceeded-three-billion-dollars/
+https://www.eleconomista.com.mx/politica/sheinbaum-anuncia-5-principios-politica-exterior-negociar-eu-20250329-752599.html
+https://www.vanguardngr.com/2025/04/insecurity-fg-rejects-us-embassys-post-pastors-testimonies-as-unfair-inaccurate/
+https://www.washingtontimes.com/news/2025/apr/5/defense-energy-deals-india-sri-lanka-modis-visit-strengthens-ties/
+https://www.rfi.fr/en/africa/20250411-fears-for-political-stability-as-joseph-kabila-plans-return-to-eastern-drc
+https://www.politico.com/newsletters/national-security-daily/2025/04/11/the-clock-is-ticking-for-iran-00287080
+https://www.usnews.com/news/world/articles/2025-04-13/voters-in-gabon-await-results-of-presidential-election-with-likely-victory-for-coup-leader
+https://www.france24.com/en/europe/20250415-french-pm-bayrou-warns-trump-s-hurricane-has-made-france-vulnerable
+https://www.africanews.com/2025/04/15/south-africa-appoints-mcebisi-jonas-as-special-us-envoy-in-bid-to-ease-tensions/
+https://www.washingtonpost.com/world/2025/04/16/russia-ukraine-expiration-energy-ceasefire/
+https://www.bloomberg.com/news/articles/2025-04-16/russia-seeks-to-buy-boeing-jets-with-frozen-assets-after-ukraine-ceasefire
+https://www.governor.virginia.gov/newsroom/news-releases/2025/february/name-1041143-en.html
+http://https://news.afp.com/#/c/main/actu/articles?id=newsml.afp.com.20250315T090647Z.doc-372h2ty&type=news
+https://www.timesunion.com/news/article/sheriff-state-police-investigating-small-plane-20272639.php
+https://www.jpost.com/breaking-news/article-850289
+https://en.yna.co.kr/view/AEN20250416003400315?section=national/politics
+https://en.mehrnews.com/news/230599/Leader-to-receive-lawmakers-for-meeting-today
+https://www.timesofisrael.com/liveblog_entry/lebanons-pm-visits-syrian-president-to-discuss-border-demarcation-and-security/
+https://www.kyivpost.com/post/50721
+https://english.alarabiya.net/topics/russia-ukraine-war
+https://www.space.com/space-exploration/launches-spacecraft/spacex-launches-9th-batch-of-proliferated-architecture-spy-satellites-for-us-government
+https://www.abc4.com/news/local-news/massive-flames-visible-from-i-215-in-salt-lake-city/
+https://www.firstcoastnews.com/article/news/local/folkston-georgia-plane-crash-davis-field/77-5ac26a38-35c2-4f85-8b6e-cce3e4fb7c98
+https://www.ilmessaggero.it/en/pope_francis_uncertain_path_to_recovery-8761087.html?refresh_ce
+https://www.hindustantimes.com/top-news/modi-leaves-for-thailand-sri-lanka-says-visit-to-bolster-ties-benefit-region-101743646746990.html
+https://www.europeafrica.army.mil/ArticleViewPressRelease/Article/4139490/press-release-three-us-soldiers-found-deceased-after-m88a2-hercules-recovered/
+https://ktla.com/news/local-news/rapidly-growing-silver-fire-prompts-evacuation-orders-in-inyo-mono-counties/
+https://buenosairesherald.com/economics/caputo-confirms-us20-billion-deal-between-argentina-and-imf
+https://www.woodtv.com/news/kalamazoo-county/police-investigate-shooting-in-kalamazoo-3/
+https://tass.com/politics/1934781
+https://www.ktsm.com/news/las-cruces-police-multiple-gunshot-victims-at-park/
+https://katu.com/news/local/state-emergency-declared-as-storms-cause-fatal-flooding-landslides-in-southern-oregon
+https://wjla.com/news/local/cia-headquarters-threats-police-presence-bomb-squad-team-fairfax-county-police-mclean-safety-public-government-trump-administration
+https://www.straitstimes.com/singapore/singapore-thailand-and-us-air-forces-hold-exercise-to-enhance-readiness-cooperation
+https://ism.smart.state.sbu/search/25 OFFICE OF SUDAN AFFAIRS 152<
+https://kdvr.com/news/local/passengers-evacuated-after-american-airlines-plane-fire-at-denver-international-airport/
+https://www.channelnewsasia.com/asia/rodrigo-duterte-icc-arrest-hague-drugs-4993946
+https://www.manchesterjournal.com/local-news/plane-crash-in-manchester/article_7ad91033-dab6-5c16-a8ee-28433e9773bc.html
+https://www.wlwt.com/article/kentucky-flooding-death-water-rescues/63807787
+https://www.bbc.co.uk/news/resources/idt-943c9a5e-32c0-4eae-8abb-4d9c4c6eae1e
+https://yemen.un.org/en/288092-un-yemen-statement-detention-additional-personnel-de-facto-authorities"""
+
+
+def get_naughty_links():
+    just_base_urls = ""
+    for link in sample.split("\n"):
+        splitted = link.split("/")
+        tmp_text = "/".join(splitted[:3])  # Join first 3 parts with slashes
+        just_base_urls += tmp_text + "\n"
+
+    with open("links_that_dont_work.txt", "w") as f:
+        f.write(just_base_urls.strip())
