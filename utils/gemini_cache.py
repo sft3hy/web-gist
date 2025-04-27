@@ -62,7 +62,7 @@ source (str): The name of the publication or website (e.g., "The New York Times"
 
 article_text (str): The full readable body of the article. This includes all meaningful paragraphs that make up the story content. Do not include navigation links, ads, sidebars, or captions. Return this as a single plain string with whitespace cleaned up. Do not edit or summarize any of the article text.
 
-published_date (str): The original publication date and time of the article, as shown on the page or in embedded metadata. If you are given a time zone, convert it to Eastern Time (ET). If you are not given a time zone, leave as is. Use this format: "2025-04-23T14:52:05"
+published_date (str): The original publication date and time of the article, as shown on the page or in embedded metadata. If you are given a time zone, convert it to Eastern Time (ET). A common time zone is Z (zulu), in a time stamp like this: "2025-04-26T16:30:00.000Z" - that corresponds to GMT or UTC, convert that to EDT (in this example it would be 2025-04-26T12:30:00.000). If you are not given a time zone, leave as is. Use this format: "2025-04-23T14:52:05"
 
 updated_date (str): The last modified or updated date and time of the article, if present. If there is no update time, return the same value as published_date.
 

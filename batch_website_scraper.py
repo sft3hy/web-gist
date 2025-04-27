@@ -5,6 +5,8 @@ import time
 import csv
 import random
 from utils.scraping_utils import scrape_site, remove_paths_and_urls
+from utils.llm_utils import ArticleInfo
+
 
 from config import (
     BEGIN_ROW,
@@ -66,26 +68,6 @@ def throttle_model(requests_deque, tokens_deque, max_req, max_tok, new_tok):
     tokens_deque.append((now, new_tok))
 
 
-def extract_dates(soup):
-    result = []
-
-    # Regular expression to match date-like strings
-    date_like_regex = re.compile(
-        r"\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(.\d+)?(Z|[+-]\d{2}:\d{2})?)?"
-    )
-
-    # Look at all tags
-    for tag in soup.find_all(True):
-        for attr, value in tag.attrs.items():
-            # Some attributes like 'class' are lists, not strings
-            if isinstance(value, list):
-                value = " ".join(value)
-            if isinstance(value, str) and date_like_regex.search(value):
-                result.append({attr: value})
-
-    return result
-
-
 representative_urls = []
 
 with open("representative_links.txt", "r") as in_file:
@@ -143,10 +125,17 @@ def call_groq(writer, url):
             llm,
         ]
     )
+    return parsed_dict
 
 
-def do_the_scraping():
-    with open(f"Parsed_links{BEGIN_ROW}-{END_ROW}.csv", "w", newline="") as f:
+def do_the_scraping(
+    url_list: list,
+    for_streamlit: bool = False,
+) -> dict["articles" : list[ArticleInfo], "file_path":str]:
+    filename_to_write = f"personal_batched_csvs/Parsed_links{BEGIN_ROW}-{END_ROW}.csv"
+    if for_streamlit:
+        filename_to_write = "user_facing_csvs/Enriched_URL_Data.csv"
+    with open(filename_to_write, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(
             [
@@ -161,12 +150,14 @@ def do_the_scraping():
             ]
         )
         total_tokens = 0
-        for i, url in enumerate(urls, 1):
+        parsed_dicts = []
+        for i, url in enumerate(url_list, 1):
+            parsed_dict = ArticleInfo
             link_is_good = True
             # headers["User-Agent"] = random.choice(user_agents)
-            print(f"[{i}/{len(urls)}] Fetching: {url}")
+            print(f"[{i}/{len(url_list)}] Fetching: {url}")
             # Small delay to avoid getting blocked
-            time.sleep(random.randint(1, 2))
+            # time.sleep(random.randint(1, 2))
 
             try:
                 if url == "":
@@ -178,7 +169,7 @@ def do_the_scraping():
                 for link in final_naughty_links:
                     if link in url:
                         print("link did not pass vibe check")
-                        call_groq(writer=writer, url=url)
+                        parsed_dict = call_groq(writer=writer, url=url)
                         link_is_good = False
 
                 parsed_dict = {}
@@ -235,7 +226,9 @@ def do_the_scraping():
                     writer.writerow(
                         [
                             url,
-                            parsed_dict.article_text[:CHAR_LIMIT],
+                            remove_paths_and_urls(parsed_dict.article_text)[
+                                :CHAR_LIMIT
+                            ],
                             parsed_dict.title,
                             parsed_dict.authors,
                             parsed_dict.source,
@@ -246,11 +239,14 @@ def do_the_scraping():
                     )
             except Exception as e:
                 print(f"Error fetching {url}: {e}")
-                call_groq(writer=writer, url=url)
+                parsed_dict = call_groq(writer=writer, url=url)
+        parsed_dicts.append({"article_info": parsed_dict, "llm": llm, "url": url})
     print("total tokens:", total_tokens)
-    print("average token count per article:", total_tokens / len(urls))
+    print("average token count per article:", total_tokens / len(url_list))
     print(f"total estimated cost: ${round(((total_tokens/1000000) * 0.1), 2)}")
 
+    return {"articles": parsed_dicts, "file_path": filename_to_write}
 
-do_the_scraping()
-print("🎉 Done!")
+
+# do_the_scraping(urls)
+# print("🎉 Done!")

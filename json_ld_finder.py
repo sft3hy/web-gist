@@ -1,6 +1,6 @@
 import json
 from bs4 import BeautifulSoup
-from parsers.text_scrubber import scrub_text
+from utils.text_scrubber import scrub_text
 
 
 def extract_ld_json_and_article(soup):

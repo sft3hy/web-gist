@@ -23,11 +23,10 @@ class ArticleInfo(BaseModel):
     article_text: str
     published_date: str
     updated_date: str
+    llm: str
 
-    def to_dict(self, llm: str):
+    def to_dict(self):
         data = self.model_dump()
-        if llm is not None:
-            data["llm"] = llm
         return data
 
 
