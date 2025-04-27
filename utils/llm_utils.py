@@ -30,7 +30,11 @@ class ArticleInfo(BaseModel):
         return data
 
 
-cache_code = create_cache().name
+json_schema = json.dumps(ArticleInfo.model_json_schema(), indent=2)
+print(json_schema)
+
+
+# cache_code = create_cache().name
 
 
 def gemini_parse_web_content(input_dict: str):
@@ -78,7 +82,7 @@ url_parser_sys_prompt = f"""
 You are a cautious and precise metadata extractor. You will receive a single URL to a news article. Your task is to infer as much real metadata as possible and return it in the following JSON structure:
 
 The JSON object must use the schema:
-{json.dumps(ArticleInfo.model_json_schema(), indent=2)}
+{json_schema}
 
 Descriptions of each field:
 
@@ -131,7 +135,7 @@ def groq_parse_url(url: str):
 visible_text_sys_prompt = f"""
 You are a web content parser. Given a URL and all visible text from a news or article webpage, extract a dictionary with:
 JSON SCHEMA:
-{json.dumps(ArticleInfo.model_json_schema(), indent=2)}
+{json_schema}
 
 Guidelines:
 - article_text: The main body—usually the longest coherent text block.
@@ -162,4 +166,4 @@ def groq_parse_visible_text(text: str):
     return ArticleInfo.model_validate_json(chat_completion.choices[0].message.content)
 
 
-# print(f"{json.dumps(ArticleInfo.model_json_schema(), indent=2)}")
+# print(f"{json_schema}")

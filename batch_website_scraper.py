@@ -7,6 +7,8 @@ import random
 from utils.scraping_utils import scrape_site, remove_paths_and_urls
 from utils.llm_utils import ArticleInfo
 
+USE_REP_LINKS = True
+
 
 from config import (
     BEGIN_ROW,
@@ -19,7 +21,7 @@ from utils.llm_utils import (
     gemini_parse_web_content,
     groq_parse_url,
 )
-from json_ld_finder import extract_ld_json_and_article
+from utils.json_ld_finder import extract_ld_json_and_article
 
 
 gemma_requests = deque()
@@ -70,30 +72,35 @@ def throttle_model(requests_deque, tokens_deque, max_req, max_tok, new_tok):
 
 representative_urls = []
 
-with open("representative_links.txt", "r") as in_file:
+with open("txt_files/representative_links.txt", "r") as in_file:
     for url in in_file.read().split("\n"):
         representative_urls.append(url)
 in_file.close()
 
-# use one article from each source
-urls = representative_urls
 
-# use Links.txt as the in file (~3300 links)
+urls = []
+if USE_REP_LINKS:
+    # use one article from each source
+    urls = representative_urls
 
-# urls = []
-# rows = open("Links.txt", "r").read().split("\n")[1:]
-# for row in rows:
-#     if row == "":
-#         urls.append("")
-#     elif re.match(
-#         r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+",
-#         row,
-#     ):
-#         urls.append(row)
+else:
+    # use Links.txt as the in file (~3300 links)
 
-# urls = urls[BEGIN_ROW:END_ROW]
+    urls = []
+    rows = open("txt_files/Links.txt", "r").read().split("\n")[1:]
+    for row in rows:
+        if row == "":
+            urls.append("")
+        elif re.match(
+            r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+",
+            row,
+        ):
+            urls.append(row)
 
-naughty_links = open("new_naughty_links.txt", "r").read().split("\n")
+    urls = urls[BEGIN_ROW:END_ROW]
+
+
+naughty_links = open("txt_files/new_naughty_links.txt", "r").read().split("\n")
 naughty_links = [link.strip() for link in naughty_links if link.strip()]
 
 
@@ -211,8 +218,11 @@ def do_the_scraping(
                         cleaned_html = str(main_content)
                     else:
                         cleaned_html = str(soup)
-                    with open("sample.html", "w") as f:
-                        f.write(str(cleaned_html))
+
+                    # write output to a html files
+
+                    # with open("sample.html", "w") as f:
+                    #     f.write(str(cleaned_html))
                     pass_dict = {"URL": url}
                     if json_ld_try is not None:
                         pass_dict["json_ld"] = json_ld_try
