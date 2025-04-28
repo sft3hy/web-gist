@@ -29,7 +29,9 @@ if urls:
 
     with st.spinner("Scraping website(s)..."):
         # Save to session_state so it persists
-        st.session_state.scraping_result = do_the_scraping(urls)
+        scrape_result = do_the_scraping(urls, for_streamlit=True)
+        print(scrape_result)
+        st.session_state.scraping_result = scrape_result
 
 # --- Display results if they exist ---
 if st.session_state.scraping_result:
