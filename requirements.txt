@@ -1,4 +1,5 @@
-streamlit==1.41.1
-groq==0.13.1
-beautifulsoup4==4.12.3
-google-generativeai==0.8.5
+streamlit==1.44.1
+groq==0.23.1
+beautifulsoup4==4.13.4
+playwright==1.51.0
+playwright-stealth==1.0.6
