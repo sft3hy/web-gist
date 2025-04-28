@@ -5,7 +5,6 @@ import json
 import os
 from utils.gemini_cache import html_parser_sys_prompt, create_cache
 from config import GEMINI_MODEL, GROQ_PARSER_MODEL, URL_MODEL, VISIBLE_TEXT_MODEL
-from google.genai import types
 
 
 gemini_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
@@ -31,10 +30,6 @@ class ArticleInfo(BaseModel):
 
 
 json_schema = json.dumps(ArticleInfo.model_json_schema(), indent=2)
-print(json_schema)
-
-
-# cache_code = create_cache().name
 
 
 def gemini_parse_web_content(input_dict: str):
@@ -46,7 +41,7 @@ def gemini_parse_web_content(input_dict: str):
             "response_mime_type": "application/json",
             "response_schema": ArticleInfo,
             # "system_instruction": html_parser_sys_prompt,
-            "cached_content": cache_code,
+            "cached_content": create_cache().name,
         },
     )
     # Use the response as a JSON string.
