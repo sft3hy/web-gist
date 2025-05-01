@@ -7,7 +7,7 @@ import random
 from utils.scraping_utils import scrape_site, remove_paths_and_urls
 from utils.llm_utils import ArticleInfo
 
-USE_REP_LINKS = True
+USE_REP_LINKS = False
 
 
 from config import (
@@ -87,14 +87,11 @@ else:
     # use Links.txt as the in file (~3300 links)
 
     urls = []
-    rows = open("txt_files/Links.txt", "r").read().split("\n")[1:]
+    rows = open("txt_files/Links.txt", "r").read().split("\n")
     for row in rows:
         if row == "":
             urls.append("")
-        elif re.match(
-            r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+",
-            row,
-        ):
+        else:
             urls.append(row)
 
     urls = urls[BEGIN_ROW:END_ROW]
@@ -118,17 +115,24 @@ final_naughty_links = get_naughty_links()
 
 
 def call_groq(writer, url):
+    tries = 3
     parsed_dict = groq_parse_url(url)
+    while parsed_dict is None and tries > 0:
+        parsed_dict = groq_parse_url(url)
+        tries -= 1
+    data = parsed_dict.to_dict()
+    cleaned_data = {k: "" if v == "unknown" else v for k, v in data.items()}
+    cleaned = ArticleInfo(**cleaned_data)
     llm = URL_MODEL
     writer.writerow(
         [
             url,
-            parsed_dict.article_text,
-            parsed_dict.title,
-            parsed_dict.authors,
-            parsed_dict.source,
-            parsed_dict.published_date,
-            parsed_dict.updated_date,
+            cleaned.article_text,
+            cleaned.title,
+            cleaned.authors,
+            cleaned.source,
+            cleaned.published_date,
+            cleaned.updated_date,
             llm,
         ]
     )
@@ -139,7 +143,7 @@ def do_the_scraping(
     url_list: list,
     for_streamlit: bool = False,
 ) -> dict["articles" : list[ArticleInfo], "file_path":str]:
-    filename_to_write = f"personal_batched_csvs/Parsed_links{BEGIN_ROW}-{END_ROW}.csv"
+    filename_to_write = f"personal_batched_csvs/Parsed_links{BEGIN_ROW+1}-{END_ROW}.csv"
     if for_streamlit:
         filename_to_write = "user_facing_csvs/Enriched_URL_Data.csv"
     with open(filename_to_write, "w", newline="") as f:
@@ -249,7 +253,19 @@ def do_the_scraping(
                     )
             except Exception as e:
                 print(f"Error fetching {url}: {e}")
-                parsed_dict = call_groq(writer=writer, url=url)
+                print("writing url with no metadata row")
+                writer.writerow(
+                    [
+                        url,
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                    ]
+                )
         parsed_dicts.append({"article_info": parsed_dict, "llm": llm, "url": url})
     print("total tokens:", total_tokens)
     print("average token count per article:", total_tokens / len(url_list))
@@ -258,5 +274,5 @@ def do_the_scraping(
     return {"articles": parsed_dicts, "file_path": filename_to_write}
 
 
-# do_the_scraping(urls)
-# print("🎉 Done!")
+do_the_scraping(urls)
+print("🎉 Done!")

@@ -95,7 +95,7 @@ def create_cache():
     try:
         cache_name = gemini_client.caches.list()[0].name
         potential_existing = gemini_client.caches.get(name=cache_name)
-        print(f"found existing cache: {cache_name}")
+        # print(f"found existing cache: {cache_name}")
         return potential_existing
     except Exception as e:
         print("cache probably not created yet:", e)
@@ -106,7 +106,7 @@ def create_cache():
             model=GEMINI_MODEL,
             config=types.CreateCachedContentConfig(
                 system_instruction=(html_parser_sys_prompt),
-                ttl="3600s",  # 1 hour
+                ttl="18000s",  # 5 hours
             ),
         )
         print(cache.name)
