@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from groq import Groq
 import json
 import os
+import requests
 from utils.gemini_cache import html_parser_sys_prompt, create_cache
 from config import GEMINI_MODEL, GROQ_PARSER_MODEL, URL_MODEL, VISIBLE_TEXT_MODEL
 
@@ -31,7 +32,7 @@ class ArticleInfo(BaseModel):
 
 
 json_schema = json.dumps(ArticleInfo.model_json_schema(), indent=2)
-cache_code = "cachedContents/dmucpupogyx3"
+cache_code = "cachedContents/ziwjnni66kwj"
 
 
 def gemini_parse_web_content(input_dict: str):
@@ -96,27 +97,43 @@ Expected output:
 """
 
 
+# def groq_parse_url(url: str):
+#     print(f"received no html, calling {URL_MODEL} on url")
+#     try:
+#         chat_completion = groq_client.chat.completions.create(
+#             messages=[
+#                 {"role": "system", "content": url_parser_sys_prompt},
+#                 {
+#                     "role": "user",
+#                     "content": str(url),
+#                 },
+#             ],
+#             model=URL_MODEL,
+#             temperature=0,
+#             response_format={"type": "json_object"},
+#         )
+#         return ArticleInfo.model_validate_json(
+#             chat_completion.choices[0].message.content
+#         )
+#     except Exception as e:
+#         print(e)
+#         return None
+
+
 def groq_parse_url(url: str):
-    print(f"received no html, calling {URL_MODEL} on url")
-    try:
-        chat_completion = groq_client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": url_parser_sys_prompt},
-                {
-                    "role": "user",
-                    "content": str(url),
-                },
+
+    response = requests.post(
+        "http://localhost:11434/api/chat",
+        json={
+            "model": "link-parser",
+            "stream": False,
+            "messages": [
+                {"role": "user", "content": url},
             ],
-            model=URL_MODEL,
-            temperature=0,
-            response_format={"type": "json_object"},
-        )
-        return ArticleInfo.model_validate_json(
-            chat_completion.choices[0].message.content
-        )
-    except Exception as e:
-        print(e)
-        return None
+        },
+    )
+
+    return ArticleInfo.model_validate_json(str(response.json()["message"]["content"]))
 
 
-print(url_parser_sys_prompt)
+# print(url_parser_sys_prompt)

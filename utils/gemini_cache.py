@@ -106,7 +106,7 @@ def create_cache():
             model=GEMINI_MODEL,
             config=types.CreateCachedContentConfig(
                 system_instruction=(html_parser_sys_prompt),
-                ttl="18000s",  # 5 hours
+                ttl="7200s",  # 2 hours
             ),
         )
         print(cache.name)
