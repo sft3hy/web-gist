@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from groq import Groq
 import json
 import os
+import time
 import requests
 from utils.gemini_cache import html_parser_sys_prompt, create_cache
 from config import GEMINI_MODEL, GROQ_PARSER_MODEL, URL_MODEL, VISIBLE_TEXT_MODEL
@@ -32,23 +33,37 @@ class ArticleInfo(BaseModel):
 
 
 json_schema = json.dumps(ArticleInfo.model_json_schema(), indent=2)
-cache_code = "cachedContents/ziwjnni66kwj"
+cache_code = "cachedContents/d680dzpf4gu1"
 
 
-def gemini_parse_web_content(input_dict: str):
-    print(f"parsing web content with {GEMINI_MODEL}")
-    response = gemini_client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=input_dict,
-        config={
-            "response_mime_type": "application/json",
-            "response_schema": ArticleInfo,
-            # "system_instruction": html_parser_sys_prompt,
-            "cached_content": cache_code,
-        },
-    )
-    # Use the response as a JSON string.
-    return ArticleInfo.model_validate_json(response.text)
+def gemini_parse_web_content(input_dict: dict):
+    max_attempts = 3
+    max_html_length = 28000
+
+    # Truncate the raw_html field if it's too long
+    if "raw_html" in input_dict and isinstance(input_dict["raw_html"], str):
+        input_dict["raw_html"] = input_dict["raw_html"][:max_html_length]
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            print(f"Attempt {attempt}: parsing web content with {GEMINI_MODEL}")
+            response = gemini_client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=str(input_dict),
+                config={
+                    "response_mime_type": "application/json",
+                    "response_schema": ArticleInfo,
+                    # "system_instruction": html_parser_sys_prompt,
+                    "cached_content": cache_code,
+                },
+            )
+            return ArticleInfo.model_validate_json(response.text)
+
+        except Exception as e:
+            print(f"Attempt {attempt} failed with error: {e}")
+            if attempt == max_attempts:
+                raise
+            time.sleep(0.5)  # optional: brief pause before retrying
 
 
 groq_client = Groq()
@@ -120,20 +135,31 @@ Expected output:
 #         return None
 
 
+import json
+
+
 def groq_parse_url(url: str):
+    try:
+        response = requests.post(
+            "http://localhost:11434/api/chat",
+            json={
+                "model": "link-parser",
+                "stream": False,
+                "messages": [
+                    {"role": "user", "content": url},
+                ],
+            },
+        )
 
-    response = requests.post(
-        "http://localhost:11434/api/chat",
-        json={
-            "model": "link-parser",
-            "stream": False,
-            "messages": [
-                {"role": "user", "content": url},
-            ],
-        },
-    )
+        # The content may be a double-encoded JSON string, so decode it
+        raw_content = response.json()["message"]["content"]
+        cleaned_json = json.loads(raw_content)  # unescape it
 
-    return ArticleInfo.model_validate_json(str(response.json()["message"]["content"]))
+        return ArticleInfo.model_validate(cleaned_json)
+
+    except Exception as e:
+        print(f"Error calling Groq parser: {e}")
+        return None  # Return a neutral failure value instead of the class itself
 
 
 # print(url_parser_sys_prompt)

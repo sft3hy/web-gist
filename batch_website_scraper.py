@@ -5,7 +5,8 @@ import time
 import csv
 import random
 from utils.scraping_utils import scrape_site, remove_paths_and_urls
-from utils.llm_utils import ArticleInfo
+from utils.llm_utils import ArticleInfo, gemini_parse_web_content, groq_parse_url
+from utils.json_ld_finder import extract_ld_json_and_article
 
 USE_REP_LINKS = False
 
@@ -17,11 +18,6 @@ from config import (
     CHAR_LIMIT,
     URL_MODEL,
 )
-from utils.llm_utils import (
-    gemini_parse_web_content,
-    groq_parse_url,
-)
-from utils.json_ld_finder import extract_ld_json_and_article
 
 
 gemma_requests = deque()
@@ -120,23 +116,27 @@ def call_groq(writer, url):
     while parsed_dict is None and tries > 0:
         parsed_dict = groq_parse_url(url)
         tries -= 1
-    data = parsed_dict.to_dict()
-    cleaned_data = {k: "" if v == "unknown" else v for k, v in data.items()}
-    cleaned = ArticleInfo(**cleaned_data)
-    llm = URL_MODEL
-    writer.writerow(
-        [
-            url,
-            cleaned.article_text,
-            cleaned.title,
-            cleaned.authors,
-            cleaned.source,
-            cleaned.published_date,
-            cleaned.updated_date,
-            llm,
-        ]
-    )
-    return parsed_dict
+    if parsed_dict is not None:
+        data = parsed_dict.to_dict()
+        cleaned_data = {k: "" if v == "unknown" else v for k, v in data.items()}
+        cleaned = ArticleInfo(**cleaned_data)
+        llm = URL_MODEL
+        writer.writerow(
+            [
+                url,
+                cleaned.article_text,
+                cleaned.title,
+                cleaned.authors,
+                cleaned.source,
+                cleaned.published_date,
+                cleaned.updated_date,
+                llm,
+            ]
+        )
+        return parsed_dict
+    else:
+        writer.writerow([url, "", "", "", "", "", "", ""])
+        return None
 
 
 def do_the_scraping(
@@ -274,5 +274,5 @@ def do_the_scraping(
     return {"articles": parsed_dicts, "file_path": filename_to_write}
 
 
-do_the_scraping(urls)
-print("🎉 Done!")
+# do_the_scraping(urls)
+# print("🎉 Done!")

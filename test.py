@@ -1,22 +1,36 @@
-import requests
+import csv
+from urllib.parse import urlparse
 
 
-def parse_url(url: str):
+def get_lonely_first_column_entries(csv_path):
+    """
+    Reads a CSV file and returns a list of values from the first column
+    of rows where all other columns are empty.
+    """
 
-    response = requests.post(
-        "http://localhost:11434/api/chat",
-        json={
-            "model": "link-parser",
-            "stream": False,
-            "messages": [
-                {"role": "user", "content": url},
-            ],
-        },
-    )
+    def try_open(encoding):
+        results = []
+        with open(csv_path, newline="", encoding=encoding, errors="replace") as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                if (
+                    row
+                    and row[0].strip()
+                    and all(cell.strip() == "" for cell in row[1:])
+                ):
+                    netloc = urlparse(row[0].strip()).netloc
+                    base_domain = ".".join(netloc.split(".")[-2:])
+                    final = "https://" + base_domain
+                    # results.append(row[0].strip())
+                    results.append(final)
+        return results
 
-    return response.json()["message"]["content"]
+    try:
+        return try_open("utf-8")  # <-- Add `return` here
+    except Exception as e:
+        print(e)
+        return try_open("ISO-8859-1")  # <-- And here
 
 
-# parse_url(
-#     "https://www.reuters.com/world/middle-east/palestinian-teenager-with-us-citizenship-shot-dead-by-israeli-settler-2025-04-06/#:~:text=RAMALLAH%2C%20April%206%20(Reuters),near%2Ddaily%20confrontations%20between%20Israeli"
-# )
+print(set(get_lonely_first_column_entries("personal_batched_csvs/Enriched_Links3.csv")))
+print(len(get_lonely_first_column_entries("personal_batched_csvs/Enriched_Links3.csv")))
