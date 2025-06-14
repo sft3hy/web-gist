@@ -236,7 +236,7 @@ def do_the_scraping(
                     total_tokens += token_est
 
                     print("token estimate of pass_dict:", token_est)
-                    parsed_dict = gemini_parse_web_content(str(pass_dict))
+                    parsed_dict = gemini_parse_web_content(pass_dict, for_streamlit)
                     writer.writerow(
                         [
                             url,
@@ -251,6 +251,14 @@ def do_the_scraping(
                             llm,
                         ]
                     )
+                    if parsed_dict:
+                        parsed_dicts.append(
+                            {"article_info": parsed_dict, "llm": llm, "url": url}
+                        )
+                    else:
+                        parsed_dicts.append(
+                            {"article_info": None, "llm": "groq-failed", "url": url}
+                        )
             except Exception as e:
                 print(f"Error fetching {url}: {e}")
                 print("writing url with no metadata row")
@@ -266,7 +274,8 @@ def do_the_scraping(
                         "",
                     ]
                 )
-        parsed_dicts.append({"article_info": parsed_dict, "llm": llm, "url": url})
+                parsed_dicts.append({"article_info": None, "llm": "error", "url": url})
+
     print("total tokens:", total_tokens)
     print("average token count per article:", total_tokens / len(url_list))
     print(f"total estimated cost: ${round(((total_tokens/1000000) * 0.1), 2)}")

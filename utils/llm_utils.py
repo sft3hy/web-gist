@@ -36,7 +36,7 @@ json_schema = json.dumps(ArticleInfo.model_json_schema(), indent=2)
 cache_code = "cachedContents/d680dzpf4gu1"
 
 
-def gemini_parse_web_content(input_dict: dict):
+def gemini_parse_web_content(input_dict: dict, for_streamlit=False):
     max_attempts = 3
     max_html_length = 28000
 
@@ -44,18 +44,20 @@ def gemini_parse_web_content(input_dict: dict):
     if "raw_html" in input_dict and isinstance(input_dict["raw_html"], str):
         input_dict["raw_html"] = input_dict["raw_html"][:max_html_length]
 
+    gemini_config = {
+        "response_mime_type": "application/json",
+        "response_schema": ArticleInfo,
+        # "system_instruction": html_parser_sys_prompt,
+    }
+    if not for_streamlit:
+        gemini_config["cached_content"] = cache_code
     for attempt in range(1, max_attempts + 1):
         try:
             print(f"Attempt {attempt}: parsing web content with {GEMINI_MODEL}")
             response = gemini_client.models.generate_content(
                 model=GEMINI_MODEL,
                 contents=str(input_dict),
-                config={
-                    "response_mime_type": "application/json",
-                    "response_schema": ArticleInfo,
-                    # "system_instruction": html_parser_sys_prompt,
-                    "cached_content": cache_code,
-                },
+                config=gemini_config,
             )
             return ArticleInfo.model_validate_json(response.text)
 
