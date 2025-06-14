@@ -1,12 +1,36 @@
 import streamlit as st
 import pandas as pd
 from batch_website_scraper import do_the_scraping
+import subprocess
+import sys
+
 
 # Import the ArticleInfo class so we can work with the object directly
 from utils.llm_utils import ArticleInfo
 
 st.set_page_config("URL Parser", page_icon=":material/precision_manufacturing:")
 st.title("URL Parser")
+
+
+# --- One-time-setup using st.cache_resource ---
+@st.cache_resource
+def install_playwright():
+    """
+    A cached function to run 'playwright install' only once per deployment.
+    """
+    st.write("Verifying Playwright browser installation...")
+    try:
+        # We use check_call to get clearer error messages if the command fails
+        subprocess.check_call([sys.executable, "-m", "playwright", "install"])
+        st.write("Playwright browsers are installed.")
+    except subprocess.CalledProcessError as e:
+        st.error(f"Failed to install Playwright browsers: {e}")
+        st.stop()  # Stop the app if installation fails
+    except FileNotFoundError:
+        st.error("Playwright not found. Please ensure it's in your requirements.txt")
+        st.stop()
+    return True
+
 
 # --- Initialize session state ---
 if "scraping_result" not in st.session_state:
