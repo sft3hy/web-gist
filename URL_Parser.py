@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 from batch_website_scraper import do_the_scraping
-import subprocess
-import sys
+import os
 
 
 # Import the ArticleInfo class so we can work with the object directly
@@ -20,45 +19,8 @@ def install_playwright_and_browsers():
     This is cached and will only run once per application startup.
     """
     st.write("⏳ Installing Playwright browsers, this may take a moment...")
-    try:
-        # The most reliable command for cloud deployments
-        command = [sys.executable, "-m", "playwright", "install", "--with-deps"]
-
-        # We use Popen to capture and stream stdout/stderr for better logging
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-
-        # Stream the output to the Streamlit log
-        log_output = []
-        while True:
-            output = process.stdout.readline()
-            if output == "" and process.poll() is not None:
-                break
-            if output:
-                line = output.strip()
-                print(line)  # This will print to the Streamlit Cloud log
-                log_output.append(line)
-
-        # Check for success
-        return_code = process.poll()
-        if return_code == 0:
-            st.success("✅ Playwright browsers installed successfully!")
-            return True
-        else:
-            st.error(f"❌ Failed to install Playwright. Return code: {return_code}")
-            # Display the logs in the Streamlit app for debugging
-            st.code("\n".join(log_output), language="text")
-            st.stop()  # Stop the app if installation fails
-
-    except Exception as e:
-        st.error(f"An exception occurred during Playwright installation: {e}")
-        st.stop()
+    os.system("playwright install")
+    os.system("playwright install-deps")
 
 
 # --- Trigger the installation at startup ---
