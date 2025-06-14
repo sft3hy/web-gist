@@ -12,24 +12,58 @@ st.set_page_config("URL Parser", page_icon=":material/precision_manufacturing:")
 st.title("URL Parser")
 
 
-# --- One-time-setup using st.cache_resource ---
+# --- One-time-setup using st.cache_resource for Playwright ---
 @st.cache_resource
-def install_playwright():
+def install_playwright_and_browsers():
     """
-    A cached function to run 'playwright install' only once per deployment.
+    Installs Playwright browsers and their system dependencies.
+    This is cached and will only run once per application startup.
     """
-    st.write("Verifying Playwright browser installation...")
+    st.write("⏳ Installing Playwright browsers, this may take a moment...")
     try:
-        # We use check_call to get clearer error messages if the command fails
-        subprocess.check_call([sys.executable, "-m", "playwright", "install"])
-        st.write("Playwright browsers are installed.")
-    except subprocess.CalledProcessError as e:
-        st.error(f"Failed to install Playwright browsers: {e}")
-        st.stop()  # Stop the app if installation fails
-    except FileNotFoundError:
-        st.error("Playwright not found. Please ensure it's in your requirements.txt")
+        # The most reliable command for cloud deployments
+        command = [sys.executable, "-m", "playwright", "install", "--with-deps"]
+
+        # We use Popen to capture and stream stdout/stderr for better logging
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+
+        # Stream the output to the Streamlit log
+        log_output = []
+        while True:
+            output = process.stdout.readline()
+            if output == "" and process.poll() is not None:
+                break
+            if output:
+                line = output.strip()
+                print(line)  # This will print to the Streamlit Cloud log
+                log_output.append(line)
+
+        # Check for success
+        return_code = process.poll()
+        if return_code == 0:
+            st.success("✅ Playwright browsers installed successfully!")
+            return True
+        else:
+            st.error(f"❌ Failed to install Playwright. Return code: {return_code}")
+            # Display the logs in the Streamlit app for debugging
+            st.code("\n".join(log_output), language="text")
+            st.stop()  # Stop the app if installation fails
+
+    except Exception as e:
+        st.error(f"An exception occurred during Playwright installation: {e}")
         st.stop()
-    return True
+
+
+# --- Trigger the installation at startup ---
+# The decorator ensures this only runs once.
+install_playwright_and_browsers()
 
 
 # --- Initialize session state ---
