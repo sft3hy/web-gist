@@ -1,40 +1,41 @@
+# utils/json_ld_finder.py
 import json
-from bs4 import BeautifulSoup
+import logging
+from bs4 import BeautifulSoup, Tag
+from typing import Any, Dict, List
+
 from utils.text_scrubber import scrub_text
 
 
-def extract_ld_json_and_article(soup):
+def extract_ld_json_and_article(soup: BeautifulSoup) -> Dict[str, Any] | None:
     """
-    Extracts the first JSON-LD (application/ld+json) script and the full article text from <p> tags.
+    Extracts JSON-LD scripts and article text from a BeautifulSoup object.
 
     Args:
-        html (str): The input HTML string.
+        soup: The BeautifulSoup object of the parsed HTML page.
 
     Returns:
-        dict: A dictionary with keys:
-              - 'ld_json': Parsed JSON-LD data or None
-              - 'article_text': Concatenated text from all <p> tags
+        A dictionary containing the list of parsed JSON-LD objects and the
+        scrubbed article text, or None if no JSON-LD is found.
     """
-
-    # Extract the first ld+json script
     script_tags = soup.find_all("script", type="application/ld+json")
-    ld_datas = []
-    if script_tags:
-        for script_tag in script_tags:
-            try:
-                ld_datas.append(json.loads(script_tag.string))
-            except json.JSONDecodeError:
-                continue
+    ld_datas: List[Dict[str, Any]] = []
 
-    if ld_datas == []:
+    for script_tag in script_tags:
+        # Ensure the tag has content
+        if not script_tag.string:
+            continue
+        try:
+            ld_datas.append(json.loads(script_tag.string))
+        except json.JSONDecodeError:
+            logging.warning("Failed to decode a JSON-LD script tag.")
+            continue
+
+    if not ld_datas:
         return None
 
-    # Extract all text in <p> tags
+    # Extract all text in <p> tags and clean it
     article_text = " ".join(p.get_text(strip=True) for p in soup.find_all("p"))
     cleaned_article_text = scrub_text(article_text)
+
     return {"ld_json_list": ld_datas, "article_text": cleaned_article_text}
-
-
-# html_string = open("html_dumps/ilmessaggero_it_20250423_145118.html", "r").read()
-# info = extract_ld_json_and_article(html_string)
-# print(info)

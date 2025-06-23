@@ -1,167 +1,155 @@
-from google import genai
-from pydantic import BaseModel
-from groq import Groq
-import json
+# utils/llm_utils.py
 import os
-import time
+import json
+import logging
 import requests
-from utils.gemini_cache import html_parser_sys_prompt, create_cache
-from config import GEMINI_MODEL, GROQ_PARSER_MODEL, URL_MODEL, VISIBLE_TEXT_MODEL
+from pathlib import Path
+from pydantic import BaseModel, ValidationError
+from google import genai
 
+from config import GEMINI_MODEL, OLLAMA_URL_PARSER_MODEL, OLLAMA_API_BASE_URL
 
-gemini_client = genai.Client(
-    api_key=os.environ["GEMINI_API_KEY"], http_options={"timeout": 30000}
+# --- Setup ---
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+try:
+    gemini_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+except ImportError:
+    # Allow the app to run without genai if not used
+    gemini_client = None
+    logging.warning(
+        "Google GenAI SDK not found. Gemini functions will not be available."
+    )
 
-from google import genai
-from pydantic import BaseModel
-import os
 
-
+# --- Data Models ---
 class ArticleInfo(BaseModel):
-    title: str
-    authors: str
-    source: str
-    article_text: str
-    published_date: str
-    updated_date: str
-
-    def to_dict(self):
-        data = self.model_dump()
-        return data
+    title: str | None = ""
+    authors: str | None = ""
+    source: str | None = ""
+    article_text: str | None = ""
+    published_date: str | None = ""
+    updated_date: str | None = ""
 
 
-json_schema = json.dumps(ArticleInfo.model_json_schema(), indent=2)
-cache_code = "cachedContents/d680dzpf4gu1"
+# --- Prompt Loading ---
+def load_prompt(file_name: str) -> str:
+    """Loads a prompt from the prompts directory."""
+    prompt_path = Path(__file__).parent.parent / "prompts" / file_name
+    if not prompt_path.exists():
+        logging.error(f"Prompt file not found: {prompt_path}")
+        return ""
+    return prompt_path.read_text(encoding="utf-8")
 
 
-def gemini_parse_web_content(input_dict: dict, for_streamlit=False):
-    max_attempts = 3
-    max_html_length = 28000
+HTML_EXTRACTOR_SYSTEM_PROMPT = load_prompt("html_extractor_system.md")
 
-    # Truncate the raw_html field if it's too long
-    if "raw_html" in input_dict and isinstance(input_dict["raw_html"], str):
-        input_dict["raw_html"] = input_dict["raw_html"][:max_html_length]
+# --- LLM Functions ---
 
-    gemini_config = {
-        "response_mime_type": "application/json",
-        "response_schema": ArticleInfo,
-        # "system_instruction": html_parser_sys_prompt,
-    }
-    if not for_streamlit:
-        gemini_config["cached_content"] = cache_code
-    for attempt in range(1, max_attempts + 1):
+
+def gemini_extract_article_info(
+    input_dict: dict, max_retries: int = 3
+) -> ArticleInfo | None:
+    """
+    Parses web content using the Gemini API with a defined JSON schema.
+    """
+    if not gemini_client:
+        logging.error("Gemini client is not initialized.")
+        return None
+
+    # Truncate content to avoid excessive token usage
+    max_content_length = 30000
+    if "website_content" in input_dict and isinstance(
+        input_dict["website_content"], str
+    ):
+        input_dict["website_content"] = input_dict["website_content"][
+            :max_content_length
+        ]
+
+    generation_config = {}
+
+    for attempt in range(max_retries):
         try:
-            print(f"Attempt {attempt}: parsing web content with {GEMINI_MODEL}")
+            logging.info(
+                f"Attempt {attempt + 1}: Calling Gemini to extract article info."
+            )
+            gemini_config = {
+                "response_mime_type": "application/json",
+                "system_instruction": HTML_EXTRACTOR_SYSTEM_PROMPT,
+            }
             response = gemini_client.models.generate_content(
                 model=GEMINI_MODEL,
-                contents=str(input_dict),
+                contents=[str(input_dict)],
                 config=gemini_config,
             )
             return ArticleInfo.model_validate_json(response.text)
-
+        except (ValidationError, json.JSONDecodeError) as e:
+            logging.error(
+                f"Gemini response validation failed on attempt {attempt + 1}: {e}"
+            )
+            logging.debug(
+                f"Invalid response text: {response.text if 'response' in locals() else 'N/A'}"
+            )
         except Exception as e:
-            print(f"Attempt {attempt} failed with error: {e}")
-            if attempt == max_attempts:
-                raise
-            time.sleep(0.5)  # optional: brief pause before retrying
+            logging.error(f"Gemini API call failed on attempt {attempt + 1}: {e}")
+
+        if attempt < max_retries - 1:
+            logging.info("Retrying...")
+
+    logging.error("All Gemini attempts failed.")
+    return None
 
 
-groq_client = Groq()
+def ollama_parse_url_metadata(url: str, max_retries: int = 3) -> ArticleInfo | None:
+    """
+    Infers metadata from a URL using a local Ollama model.
+    """
+    for attempt in range(max_retries):
+        try:
+            logging.info(
+                f"Attempt {attempt + 1}: Calling local Ollama model '{OLLAMA_URL_PARSER_MODEL}' for URL."
+            )
+            response = requests.post(
+                OLLAMA_API_BASE_URL,
+                json={
+                    "model": OLLAMA_URL_PARSER_MODEL,
+                    "stream": False,
+                    "messages": [{"role": "user", "content": url}],
+                },
+                timeout=30,  # 30-second timeout
+            )
+            response.raise_for_status()
 
-url_parser_sys_prompt = f"""
-You are a cautious and precise metadata extractor. You will receive a single URL to a news article. Your task is to infer as much real metadata as possible and return it in the following JSON structure:
+            raw_content = response.json()["message"]["content"]
 
-Respond only with JSON using this format:
-{{
-    \"title\": \"the title of the article\"
-    \"authors\": \"author(s) of the article\"
-    \"source\": \"news source\"
-    \"article_text\": \"unknown\"
-    \"published_date\": \"date from url\"
-    \"updated_date\": \"date from url\"
-}}
+            # The model might return a string containing JSON, so we parse it.
+            try:
+                # First, try to load it directly
+                json_data = json.loads(raw_content)
+            except json.JSONDecodeError:
+                # If that fails, it might be a markdown-style code block
+                cleaned_str = (
+                    raw_content.strip()
+                    .replace("```json", "")
+                    .replace("```", "")
+                    .strip()
+                )
+                json_data = json.loads(cleaned_str)
 
-Descriptions of each field:
+            # Validate with Pydantic model
+            return ArticleInfo.model_validate(json_data)
 
-- title: Do not guess or fabricate a title. If the URL contains readable words or a slug that appears to be a title, use it (e.g., from the last part of the path). Otherwise, return "".
-- authors: Leave this as "" unless a specific person's name appears clearly in the URL (e.g., /by/john-smith/).
-- source: Use the domain name from the URL (e.g., “bbc.com”, “nytimes.com”, “reuters.com”). Normalize it to a clean readable form when possible, such as “BBC” or “Reuters”.
-- article_text: Always return "" (you do not have the article body).
-- published_date: Only extract a date if an explicit, clearly formatted date string appears in the URL path (e.g., /2024/12/15/, /15-apr-2023/, or similar). If no such date is visible in the URL, **do not guess** — return "".
-- updated_date: Return the same value as published_date if available, or "".
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Ollama API request failed on attempt {attempt + 1}: {e}")
+        except (json.JSONDecodeError, KeyError, ValidationError) as e:
+            logging.error(
+                f"Failed to parse or validate Ollama response on attempt {attempt + 1}: {e}"
+            )
+            logging.debug(
+                f"Invalid response content: {raw_content if 'raw_content' in locals() else 'N/A'}"
+            )
 
-Strict rules:
-- Never infer or hallucinate any data. You must only use what is **explicitly** and **visibly** present in the URL string.
-- Especially for dates: if the URL does not visibly contain a date, you must return "unkown"for both `published_date` and `updated_date`.
-- Your response must be only the final JSON object, with no explanation or comments.
-- Always return all 6 fields exactly as specified. If you cannot extract a value, use "unknown" instead of an empty string..
-
-You will receive only one input: a string containing the article URL.
-
-Example input: https://www.governor.virginia.gov/newsroom/news-releases/2025/february/name-1041143-en.html
-
-Expected output:
-{{
-  "title": "unknown",
-  "authors": "unknown",
-  "source": "Governer of Virginia",
-  "article_text": "unknown",
-  "published_date": "2025-02",
-  "updated_date": "2025-02"
-}}
-"""
-
-
-# def groq_parse_url(url: str):
-#     print(f"received no html, calling {URL_MODEL} on url")
-#     try:
-#         chat_completion = groq_client.chat.completions.create(
-#             messages=[
-#                 {"role": "system", "content": url_parser_sys_prompt},
-#                 {
-#                     "role": "user",
-#                     "content": str(url),
-#                 },
-#             ],
-#             model=URL_MODEL,
-#             temperature=0,
-#             response_format={"type": "json_object"},
-#         )
-#         return ArticleInfo.model_validate_json(
-#             chat_completion.choices[0].message.content
-#         )
-#     except Exception as e:
-#         print(e)
-#         return None
-
-
-import json
-
-
-def groq_parse_url(url: str):
-    try:
-        response = requests.post(
-            "http://localhost:11434/api/chat",
-            json={
-                "model": "link-parser",
-                "stream": False,
-                "messages": [
-                    {"role": "user", "content": url},
-                ],
-            },
-        )
-
-        # The content may be a double-encoded JSON string, so decode it
-        raw_content = response.json()["message"]["content"]
-        cleaned_json = json.loads(raw_content)  # unescape it
-
-        return ArticleInfo.model_validate(cleaned_json)
-
-    except Exception as e:
-        print(f"Error calling Groq parser: {e}")
-        return None  # Return a neutral failure value instead of the class itself
-
-
-# print(url_parser_sys_prompt)
+    logging.error(f"All Ollama attempts failed for URL: {url}")
+    return None

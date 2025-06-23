@@ -1,287 +1,244 @@
-from bs4 import BeautifulSoup
-import re
-from collections import deque
-import time
+# batch_website_scraper.py
 import csv
-import random
-from utils.scraping_utils import scrape_site, remove_paths_and_urls
-from utils.llm_utils import ArticleInfo, gemini_parse_web_content, groq_parse_url
+import logging
+import re
+from pathlib import Path
+
+from bs4 import BeautifulSoup
+
+from config import CHAR_LIMIT, GEMINI_MODEL, BEGIN_ROW, END_ROW
+from utils.llm_utils import (
+    ArticleInfo,
+    gemini_extract_article_info,
+    ollama_parse_url_metadata,
+)
+from utils.scraping_utils import scrape_site, fix_mojibake
 from utils.json_ld_finder import extract_ld_json_and_article
 
-USE_REP_LINKS = False
-
-
-from config import (
-    BEGIN_ROW,
-    END_ROW,
-    GEMINI_MODEL,
-    CHAR_LIMIT,
-    URL_MODEL,
+# --- Setup Logging ---
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-
-gemma_requests = deque()
-gemma_tokens = deque()
-
-GEMMA_REQ_PER_MIN = 30
-GEMMA_TOK_PER_MIN = 15000
+# --- Helper Functions ---
 
 
-# Token estimator (roughly 4 chars/token)
-def estimate_tokens(text):
-    return max(1, len(text) // 4)
+def load_urls_from_file(file_path: Path) -> list[str]:
+    """Loads non-empty, stripped URLs from a text file."""
+    if not file_path.exists():
+        logging.warning(f"URL file not found: {file_path}")
+        return []
+    with file_path.open("r", encoding="utf-8") as f:
+        return [line.strip() for line in f if line.strip()]
 
 
-# Deques to hold (timestamp, token count)
-llama_requests = deque()
-llama_tokens = deque()
-
-gemma_requests = deque()
-gemma_tokens = deque()
-
-
-def throttle_model(requests_deque, tokens_deque, max_req, max_tok, new_tok):
-    now = time.time()
-
-    # Purge requests older than 60 seconds
-    while requests_deque and now - requests_deque[0] > 60:
-        requests_deque.popleft()
-    while tokens_deque and now - tokens_deque[0][0] > 60:
-        tokens_deque.popleft()
-
-    # Wait if we exceed limits
-    while (
-        len(requests_deque) >= max_req
-        or sum(tok for _, tok in tokens_deque) + new_tok > max_tok
-    ):
-        print("sleeping while groq models cool down...")
-        time.sleep(1)
-        now = time.time()
-        while requests_deque and now - requests_deque[0] > 60:
-            requests_deque.popleft()
-        while tokens_deque and now - tokens_deque[0][0] > 60:
-            tokens_deque.popleft()
-
-    requests_deque.append(now)
-    tokens_deque.append((now, new_tok))
+def get_naughty_link_bases() -> set[str]:
+    """Loads and processes 'naughty links' to get a set of base URLs for quick checking."""
+    naughty_links_path = Path("txt_files/new_naughty_links.txt")
+    urls = load_urls_from_file(naughty_links_path)
+    # Return a set of base URLs (e.g., 'https://www.example.com') for faster matching
+    return {"/".join(link.split("/")[:3]) for link in urls}
 
 
-representative_urls = []
-
-with open("txt_files/representative_links.txt", "r") as in_file:
-    for url in in_file.read().split("\n"):
-        representative_urls.append(url)
-in_file.close()
-
-
-urls = []
-if USE_REP_LINKS:
-    # use one article from each source
-    urls = representative_urls
-
-else:
-    # use Links.txt as the in file (~3300 links)
-
-    urls = []
-    rows = open("txt_files/Links.txt", "r").read().split("\n")
-    for row in rows:
-        if row == "":
-            urls.append("")
-        else:
-            urls.append(row)
-
-    urls = urls[BEGIN_ROW:END_ROW]
+def write_csv_header(writer):
+    """Writes the standard header to the CSV file."""
+    writer.writerow(
+        [
+            "url",
+            "title",
+            "authors",
+            "source",
+            "published_date",
+            "updated_date",
+            "llm_used",
+            "status",
+            "error_message",
+            "article_text",
+        ]
+    )
 
 
-naughty_links = open("txt_files/new_naughty_links.txt", "r").read().split("\n")
-naughty_links = [link.strip() for link in naughty_links if link.strip()]
-
-
-def get_naughty_links():
-    just_base_urls = []
-    for link in naughty_links:
-        splitted = link.split("/")
-        tmp_text = "/".join(splitted[:3])  # Join first 3 parts with slashes
-        just_base_urls.append(tmp_text)
-
-    return just_base_urls
-
-
-final_naughty_links = get_naughty_links()
-
-
-def call_groq(writer, url):
-    tries = 3
-    parsed_dict = groq_parse_url(url)
-    while parsed_dict is None and tries > 0:
-        parsed_dict = groq_parse_url(url)
-        tries -= 1
-    if parsed_dict is not None:
-        data = parsed_dict.to_dict()
-        cleaned_data = {k: "" if v == "unknown" else v for k, v in data.items()}
-        cleaned = ArticleInfo(**cleaned_data)
-        llm = URL_MODEL
+def write_csv_row(writer, result: dict):
+    """Writes a result dictionary to the CSV file."""
+    info = result.get("article_info")
+    if isinstance(info, ArticleInfo):
         writer.writerow(
             [
-                url,
-                cleaned.article_text,
-                cleaned.title,
-                cleaned.authors,
-                cleaned.source,
-                cleaned.published_date,
-                cleaned.updated_date,
-                llm,
+                result.get("url"),
+                info.title,
+                info.authors,
+                info.source,
+                info.published_date,
+                info.updated_date,
+                result.get("llm_used"),
+                result.get("status"),
+                "",  # No error message
+                fix_mojibake(info.article_text[:CHAR_LIMIT]),
             ]
         )
-        return parsed_dict
-    else:
-        writer.writerow([url, "", "", "", "", "", "", ""])
-        return None
+    else:  # Failure case
+        writer.writerow(
+            [
+                result.get("url"),
+                "",
+                "",
+                "",
+                "",
+                "",
+                result.get("llm_used", "N/A"),
+                result.get("status"),
+                result.get("error_message", "Unknown error"),
+                "",
+            ]
+        )
 
 
-def do_the_scraping(
-    url_list: list,
-    for_streamlit: bool = False,
-) -> dict["articles" : list[ArticleInfo], "file_path":str]:
-    filename_to_write = f"personal_batched_csvs/Parsed_links{BEGIN_ROW+1}-{END_ROW}.csv"
-    if for_streamlit:
-        filename_to_write = "user_facing_csvs/Enriched_URL_Data.csv"
-    with open(filename_to_write, "w", newline="") as f:
+# --- Core Processing Logic ---
+
+
+def process_single_url(url: str, naughty_link_bases: set) -> dict:
+    """
+    Processes a single URL from scraping to LLM extraction.
+    Returns a dictionary with the processing result.
+    """
+    # 1. Check if URL is on the naughty list
+    base_url = "/".join(url.split("/")[:3])
+    if base_url in naughty_link_bases:
+        logging.info(f"URL on naughty list, parsing with Ollama: {url}")
+        try:
+            article_info = ollama_parse_url_metadata(url)
+            if article_info:
+                return {
+                    "url": url,
+                    "article_info": article_info,
+                    "status": "success_url_parser",
+                    "llm_used": "ollama-url-parser",
+                }
+            else:
+                raise ValueError("Ollama parser returned None")
+        except Exception as e:
+            logging.error(f"Ollama URL parser failed for {url}: {e}")
+            return {
+                "url": url,
+                "article_info": None,
+                "status": "error_url_parser",
+                "error_message": str(e),
+                "llm_used": "ollama-url-parser",
+            }
+
+    # 2. Scrape the site if it's not a naughty link
+    try:
+        logging.info(f"Scraping: {url}")
+        html_bytes = scrape_site(url)
+        soup = BeautifulSoup(html_bytes, "html.parser")
+
+        # 3. Extract content for LLM
+        # Remove noisy tags to reduce tokens and improve focus
+        for tag in soup(["script", "style", "nav", "footer", "aside", "form"]):
+            tag.decompose()
+
+        main_content = soup.find("article") or soup.find("main") or soup.body
+        content_text = (
+            main_content.get_text(separator=" ", strip=True) if main_content else ""
+        )
+        content_text = re.sub(r"\s+", " ", content_text).strip()
+
+        # Find JSON-LD data
+        json_ld_data = extract_ld_json_and_article(soup)
+
+        # 4. Prepare data and call Gemini
+        pass_dict = {"url": url}
+        if json_ld_data:
+            pass_dict["json_ld"] = json_ld_data
+        if content_text:
+            # Fix potential mojibake before sending to LLM
+            pass_dict["website_content"] = fix_mojibake(content_text)
+
+        logging.info(f"Extracting metadata with Gemini for: {url}")
+        article_info = gemini_extract_article_info(pass_dict)
+
+        return {
+            "url": url,
+            "article_info": article_info,
+            "status": "success",
+            "llm_used": GEMINI_MODEL,
+        }
+
+    except Exception as e:
+        logging.error(f"Full scraping/parsing failed for {url}: {e}")
+        return {
+            "url": url,
+            "article_info": None,
+            "status": "error_scraping",
+            "error_message": str(e),
+            "llm_used": "N/A",
+        }
+
+
+# --- Main Orchestration Function ---
+
+
+def process_urls(
+    url_list: list[str], output_filename: str, for_streamlit: bool = False
+) -> dict:
+    """
+    Takes a list of URLs, processes them, writes to a CSV, and returns results.
+    """
+    output_path = Path(output_filename)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    naughty_link_bases = get_naughty_link_bases()
+    all_results = []
+
+    with output_path.open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
-        writer.writerow(
-            [
-                "URL",
-                "article_text",
-                "title",
-                "author",
-                "source",
-                "published_date",
-                "updated_date",
-                "LLM",
-            ]
-        )
-        total_tokens = 0
-        parsed_dicts = []
+        write_csv_header(writer)
+
+        total_urls = len(url_list)
         for i, url in enumerate(url_list, 1):
-            parsed_dict = ArticleInfo
-            link_is_good = True
-            # headers["User-Agent"] = random.choice(user_agents)
-            print(f"[{i}/{len(url_list)}] Fetching: {url}")
-            # Small delay to avoid getting blocked
-            # time.sleep(random.randint(1, 2))
+            logging.info(f"--- Processing URL {i}/{total_urls}: {url} ---")
 
-            try:
-                if url == "":
-                    print("writing blank row")
-                    writer.writerow(["", "", "", "", "", ""])
-                    continue
-                # pre processed and found these links don't work - we don't need to try to scrape them
-                # just pass to groq to infer info from URL
-                for link in final_naughty_links:
-                    if link in url:
-                        print("link did not pass vibe check")
-                        parsed_dict = call_groq(writer=writer, url=url)
-                        link_is_good = False
+            if not url or not url.startswith(("http://", "https://")):
+                logging.warning(f"Skipping invalid URL: {url}")
+                result = {
+                    "url": url,
+                    "article_info": None,
+                    "status": "error_invalid_url",
+                    "error_message": "Invalid or empty URL",
+                    "llm_used": "N/A",
+                }
+            else:
+                result = process_single_url(url, naughty_link_bases)
 
-                parsed_dict = {}
-                llm = GEMINI_MODEL
-                if link_is_good:
-                    print("link passed the vibe check")
-                    html = scrape_site(url)
+            all_results.append(result)
+            write_csv_row(writer, result)
 
-                    soup = BeautifulSoup(html, "html.parser")
+            if for_streamlit:
+                # In Streamlit, we can provide real-time feedback
+                # but for now, we'll just log.
+                pass
 
-                    json_ld_try = extract_ld_json_and_article(soup)
-
-                    # Remove noisy elements to reduce token count
-                    for tag in soup(
-                        [
-                            "script",
-                            "style",
-                            "nav",
-                            "footer",
-                            "aside",
-                            "noscript",
-                            "iframe",
-                            "link",
-                            "picture",
-                            "source",
-                            "img",
-                        ]
-                    ):
-                        tag.decompose()
-
-                    # Optionally keep only relevant top-level sections (e.g. <article>, <main>, etc.)
-                    # You could also consider extracting just these elements instead of cleaning in-place
-                    main_content = (
-                        soup.find("article") or soup.find("main") or soup.body
-                    )
-
-                    # If found, keep only the main content; else fallback to the cleaned soup
-                    if main_content:
-                        cleaned_html = str(main_content)
-                    else:
-                        cleaned_html = str(soup)
-
-                    # write output to a html files
-
-                    # with open("sample.html", "w") as f:
-                    #     f.write(str(cleaned_html))
-                    pass_dict = {"URL": url}
-                    if json_ld_try is not None:
-                        pass_dict["json_ld"] = json_ld_try
-                    pass_dict["raw_html"] = cleaned_html
-
-                    token_est = len(str(pass_dict)) / 4
-                    total_tokens += token_est
-
-                    print("token estimate of pass_dict:", token_est)
-                    parsed_dict = gemini_parse_web_content(pass_dict, for_streamlit)
-                    writer.writerow(
-                        [
-                            url,
-                            remove_paths_and_urls(parsed_dict.article_text)[
-                                :CHAR_LIMIT
-                            ],
-                            parsed_dict.title,
-                            parsed_dict.authors,
-                            parsed_dict.source,
-                            parsed_dict.published_date,
-                            parsed_dict.updated_date,
-                            llm,
-                        ]
-                    )
-                    if parsed_dict:
-                        parsed_dicts.append(
-                            {"article_info": parsed_dict, "llm": llm, "url": url}
-                        )
-                    else:
-                        parsed_dicts.append(
-                            {"article_info": None, "llm": "groq-failed", "url": url}
-                        )
-            except Exception as e:
-                print(f"Error fetching {url}: {e}")
-                print("writing url with no metadata row")
-                writer.writerow(
-                    [
-                        url,
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                    ]
-                )
-                parsed_dicts.append({"article_info": None, "llm": "error", "url": url})
-
-    print("total tokens:", total_tokens)
-    print("average token count per article:", total_tokens / len(url_list))
-    print(f"total estimated cost: ${round(((total_tokens/1000000) * 0.1), 2)}")
-
-    return {"articles": parsed_dicts, "file_path": filename_to_write}
+    logging.info(f"Processing complete. Results saved to {output_path}")
+    return {"articles": all_results, "file_path": str(output_path)}
 
 
-# do_the_scraping(urls)
-# print("🎉 Done!")
+if __name__ == "__main__":
+    # This block allows running the script directly for batch processing.
+    logging.info("Starting batch scraping process...")
+
+    links_path = Path("txt_files/Links.txt")
+    urls_to_process = load_urls_from_file(links_path)
+
+    if not urls_to_process:
+        logging.error("No URLs found to process. Exiting.")
+    else:
+        # Slice the URLs based on config for batching
+        urls_subset = urls_to_process[BEGIN_ROW:END_ROW]
+        logging.info(
+            f"Loaded {len(urls_to_process)} URLs, processing slice [{BEGIN_ROW}:{END_ROW}] ({len(urls_subset)} URLs)."
+        )
+
+        output_file = f"personal_batched_csvs/Parsed_links_{BEGIN_ROW+1}-{END_ROW}.csv"
+        process_urls(urls_subset, output_file)
+
+    logging.info("🎉 Batch scraping done!")

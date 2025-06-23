@@ -1,129 +1,202 @@
+# URL_Parser.py
 import streamlit as st
 import pandas as pd
-from batch_website_scraper import do_the_scraping
 import os
+from pathlib import Path
 
-
-# Import the ArticleInfo class so we can work with the object directly
+# Import refactored processing logic
+from batch_website_scraper import process_urls
 from utils.llm_utils import ArticleInfo
+from utils.scraping_utils import fix_mojibake
 
-st.set_page_config("URL Parser", page_icon=":material/precision_manufacturing:")
-st.title("URL Parser")
+# --- Page Configuration ---
+st.set_page_config(
+    "URL Parser",
+    page_icon=":material/precision_manufacturing:",
+    layout="wide",
+)
+st.title("🔗 URL Parser")
+st.markdown(
+    "Enter URLs or upload a CSV to extract metadata and article text using web scraping and AI."
+)
+
+# --- Functions ---
 
 
-# --- One-time-setup using st.cache_resource for Playwright ---
 @st.cache_resource
 def install_playwright_and_browsers():
     """
     Installs Playwright browsers and their system dependencies.
     This is cached and will only run once per application startup.
     """
-    st.write("⏳ Installing Playwright browsers, this may take a moment...")
-    os.system("playwright install")
-    os.system("playwright install-deps")
+    with st.spinner("⏳ Setting up environment (this happens once)..."):
+        # Using st.progress to give better feedback
+        # progress_bar = st.progress(0, "Installing Playwright browsers...")
+        os.system("playwright install --with-deps > playwright_install.log")
+        # progress_bar.progress(100, "Setup complete!")
+        # st.success("Environment is ready!")
+        # Clean up log file
+        if os.path.exists("playwright_install.log"):
+            os.remove("playwright_install.log")
 
 
-# --- Trigger the installation at startup ---
-# The decorator ensures this only runs once.
-install_playwright_and_browsers()
+def initialize_session_state():
+    """Initializes session state variables."""
+    if "scraping_result" not in st.session_state:
+        st.session_state.scraping_result = None
+    if "urls_to_process" not in st.session_state:
+        st.session_state.urls_to_process = []
+    if "processed_file_id" not in st.session_state:
+        st.session_state.processed_file_id = None
+    # Add this new state variable
+    if "processing_triggered" not in st.session_state:
+        st.session_state.processing_triggered = False
 
 
-# --- Initialize session state ---
-if "scraping_result" not in st.session_state:
-    st.session_state.scraping_result = None
-if "urls_to_process" not in st.session_state:
-    st.session_state.urls_to_process = None
+def handle_user_input():
+    """Manages UI for URL input and file uploads."""
+    st.header("Provide URLs")
+    col1, col2 = st.columns([1, 1])
 
-# --- UI: Input text or upload file ---
-uploaded_file = st.file_uploader("Or upload a CSV file of URLs:", type=["csv"])
-input_url = st.chat_input("Enter a URL or a comma-separated list of URLs:")
+    with col1:
+        input_urls_text = st.text_area(
+            "Enter URLs (one per line or comma-separated)",
+            height=150,
+            placeholder="https://www.example.com/article1\nhttps://www.example.com/article2",
+        )
+        if input_urls_text:
+            # Split by comma or newline, strip whitespace, and filter empty strings
+            urls = [
+                url.strip()
+                for line in input_urls_text.split("\n")
+                for url in line.split(",")
+                if url.strip()
+            ]
+            if urls:
+                st.session_state.urls_to_process = urls
 
-# --- Handle input and set URLs to be processed ---
-if uploaded_file is not None:
-    # Use a unique identifier for the uploaded file to avoid reprocessing
-    if st.session_state.get("processed_file_name") != uploaded_file.name:
-        df = pd.read_csv(uploaded_file)
-        urls = df.iloc[:, 0].dropna().tolist()
-        st.session_state.urls_to_process = urls
-        st.session_state.processed_file_name = uploaded_file.name
-elif input_url:
-    urls = [url.strip() for url in input_url.split(",") if url.strip()]
-    st.session_state.urls_to_process = urls
+    with col2:
+        uploaded_file = st.file_uploader(
+            "Or upload a CSV/TXT file of URLs", type=["csv", "txt"]
+        )
+        if uploaded_file:
+            # Create a unique identifier for the file to prevent reprocessing on rerun
+            file_id = f"{uploaded_file.name}-{uploaded_file.size}"
+            if st.session_state.processed_file_id != file_id:
+                try:
+                    if uploaded_file.type == "text/csv":
+                        df = pd.read_csv(uploaded_file, header=None)
+                        urls = df.iloc[:, 0].dropna().astype(str).tolist()
+                    else:  # txt file
+                        urls = [
+                            line.decode("utf-8").strip()
+                            for line in uploaded_file
+                            if line.strip()
+                        ]
 
-# --- Trigger scraping if new URLs are available in session state ---
-if st.session_state.urls_to_process:
-    urls_to_run = st.session_state.urls_to_process
-    st.chat_message("user").write(
-        f"Received {len(urls_to_run)} URL(s). Processing now..."
-    )
+                    st.session_state.urls_to_process = urls
+                    st.session_state.processed_file_id = file_id
+                except Exception as e:
+                    st.error(f"Error reading file: {e}")
 
-    with st.spinner("Scraping website(s) and analyzing content..."):
-        # The scraper function is called here
-        scrape_result = do_the_scraping(urls_to_run, for_streamlit=True)
-        st.session_state.scraping_result = scrape_result
-
-    # Clear the processing queue to prevent re-running on the next interaction
-    st.session_state.urls_to_process = None
+    return st.session_state.urls_to_process
 
 
-# --- Display results if they exist in session state ---
-if st.session_state.scraping_result:
-    scraping_result = st.session_state.scraping_result
-    articles = scraping_result.get("articles", [])
-    file_path = scraping_result.get("file_path", None)
+def display_results():
+    """Renders the scraping results in the UI."""
+    if not st.session_state.scraping_result:
+        return
+
+    results = st.session_state.scraping_result
+    articles = results.get("articles", [])
+    file_path = results.get("file_path")
 
     if not articles:
         st.warning(
             "Scraping did not return any articles. Please check the URLs and try again."
         )
-    else:
-        with st.chat_message("ai"):
-            st.write(f"Successfully processed {len(articles)} article(s):")
+        return
 
-            for idx, article_entry in enumerate(articles, start=1):
-                # FIX: Extract the ArticleInfo object from the dictionary
-                article_info_obj = article_entry.get("article_info")
-                llm_used = article_entry.get("llm", "Unknown")
-                url = article_entry.get("url", "Unknown URL")
+    st.header("📄 Processing Results")
+    st.success(f"Successfully processed {len(articles)} URL(s).")
 
-                # Safety check: ensure we have a valid ArticleInfo object before proceeding
-                if isinstance(article_info_obj, ArticleInfo):
-                    # Now we can safely use dot notation (e.g., article_info_obj.title)
-                    expander_title = article_info_obj.title or "Untitled Article"
-                    with st.expander(
-                        f"Article {idx}: {expander_title}",
-                        expanded=False,
-                    ):
-                        # Create a display dictionary using the object's attributes
-                        display_data = {
-                            "URL": url,
-                            "Title": article_info_obj.title,
-                            "Author(s)": article_info_obj.authors,
-                            "Source": article_info_obj.source,
-                            "Published Date": article_info_obj.published_date,
-                            "Updated Date": article_info_obj.updated_date,
-                            "Shortened Article Text": (
-                                f"{article_info_obj.article_text[:500]}..."
-                                if article_info_obj.article_text
-                                else "N/A"
-                            ),
-                            "LLM Used": llm_used,
-                        }
-                        # Use a more readable format for display
-                        for key, value in display_data.items():
-                            st.markdown(f"**{key}:** {value}")
-                else:
-                    st.warning(f"Could not parse article data for URL: {url}")
+    if file_path and Path(file_path).exists():
+        with open(file_path, "rb") as fp:
+            st.download_button(
+                label="Download Results as CSV",
+                data=fp,
+                file_name=Path(file_path).name,
+                mime="text/csv",
+            )
 
-    if file_path:
-        try:
-            with open(file_path, "rb") as f:
-                st.download_button(
-                    label="Download all article info as CSV",
-                    data=f,
-                    file_name=file_path.split("/")[-1],
-                    # The scraper creates a CSV file
-                    mime="text/csv",
-                )
-        except FileNotFoundError:
-            st.error(f"Could not find the results file at path: {file_path}")
+    for idx, entry in enumerate(articles, 1):
+        article_info = entry.get("article_info")
+        url = entry.get("url", "Unknown URL")
+        llm_used = entry.get("llm_used", "N/A")
+        status = entry.get("status", "Unknown")
+
+        if isinstance(article_info, ArticleInfo):
+            # --- MOJIBAKE FIX ---
+            # Apply `fix_mojibake` to all text fields before displaying
+            title = fix_mojibake(article_info.title or "Untitled Article")
+            authors = fix_mojibake(article_info.authors or "N/A")
+            text_preview = fix_mojibake(article_info.article_text or "")
+            source = fix_mojibake(article_info.source or "N/A")
+            published_date = fix_mojibake(article_info.published_date or "N/A")
+            updated_date = fix_mojibake(article_info.updated_date or "N/A")
+
+            expander_title = f"✅ Success: {title}"
+            is_expanded = False
+        else:
+            expander_title = f"⚠️ Failed: {url} ({status})"
+            is_expanded = True
+
+        with st.expander(expander_title, expanded=is_expanded):
+            if isinstance(article_info, ArticleInfo):
+                st.markdown(f"**URL:** [{url}]({url})")
+                st.markdown(f"**Source:** {source}")
+                st.markdown(f"**Author(s):** {authors}")
+                st.markdown(f"**Published Date:** {published_date}")
+                st.markdown(f"**LLM Used:** `{llm_used}`")
+                st.write(f"**Article Text Preview:** {text_preview[:1500]}...")
+            else:
+                st.error(f"Could not parse article data. Status: {status}")
+
+
+# --- Main Application Flow ---
+install_playwright_and_browsers()
+initialize_session_state()
+
+# This part just gathers the URLs from user input
+urls_from_input = handle_user_input()
+
+# Add an explicit button to start the processing
+st.divider()
+if st.button(
+    "🚀 Process URLs",
+    type="primary",
+    disabled=not urls_from_input,
+    use_container_width=True,
+):
+    st.session_state.processing_triggered = True
+
+# This block only runs if the button was clicked
+if st.session_state.processing_triggered:
+    with st.spinner(
+        "Scraping websites and analyzing content... This may take a little while."
+    ):
+        output_filename = "user_facing_csvs/Enriched_URL_Data.csv"
+        # Use the URLs stored in the session state
+        results = process_urls(
+            st.session_state.urls_to_process, output_filename, for_streamlit=True
+        )
+        st.session_state.scraping_result = results
+
+    # Reset the trigger and the URL list to prevent re-running on the next interaction
+    st.session_state.processing_triggered = False
+    st.session_state.urls_to_process = []
+    st.rerun()  # Force a rerun to update the UI cleanly after processing
+
+# This will now display results without re-triggering the processing
+# because `processing_triggered` will be False.
+display_results()

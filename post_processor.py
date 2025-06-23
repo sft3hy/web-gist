@@ -1,111 +1,78 @@
+# post_processor.py
 import csv
-from utils.llm_utils import ArticleInfo, gemini_parse_web_content
-from batch_website_scraper import call_groq, get_naughty_links
-from utils.json_ld_finder import extract_ld_json_and_article
-from config import GEMINI_MODEL, CHAR_LIMIT
-from bs4 import BeautifulSoup
-from utils.scraping_utils import scrape_site, remove_paths_and_urls
+import logging
+from pathlib import Path
+
+# Reuse the core processing logic
+from batch_website_scraper import (
+    process_single_url,
+    get_naughty_link_bases,
+    write_csv_header,
+    write_csv_row,
+)
+
+# --- Setup Logging ---
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
-def scrape_link(url: str, writer):
-    naughties = get_naughty_links()
-    for naughty in naughties:
-        if naughty in url:
-            call_groq(writer=writer, url=url)
-    else:
-        try:
-            llm = GEMINI_MODEL
-            print("link passed the vibe check")
-            html = scrape_site(url)
-
-            soup = BeautifulSoup(html, "html.parser")
-
-            json_ld_try = extract_ld_json_and_article(soup)
-
-            # Remove noisy elements to reduce token count
-            for tag in soup(
-                [
-                    "script",
-                    "style",
-                    "nav",
-                    "footer",
-                    "aside",
-                    "noscript",
-                    "iframe",
-                    "link",
-                    "picture",
-                    "source",
-                    "img",
-                ]
-            ):
-                tag.decompose()
-
-            # Optionally keep only relevant top-level sections (e.g. <article>, <main>, etc.)
-            main_content = soup.find("article") or soup.find("main") or soup.body
-
-            # If found, keep only the main content; else fallback to the cleaned soup
-            if main_content:
-                cleaned_html = str(main_content)
-            else:
-                cleaned_html = str(soup)
-
-            pass_dict = {"URL": url}
-            if json_ld_try is not None:
-                pass_dict["json_ld"] = json_ld_try
-            pass_dict["raw_html"] = cleaned_html
-
-            token_est = len(str(pass_dict)) / 4
-
-            print("token estimate of pass_dict:", token_est)
-            parsed_dict = gemini_parse_web_content(pass_dict)
-            writer.writerow(
-                [
-                    url,
-                    remove_paths_and_urls(parsed_dict.article_text)[:CHAR_LIMIT],
-                    parsed_dict.title,
-                    parsed_dict.authors,
-                    parsed_dict.source,
-                    parsed_dict.published_date,
-                    parsed_dict.updated_date,
-                    llm,
-                ]
-            )
-        except Exception as e:
-            print(f"Error fetching {url}: {e}")
-            print("calling groq")
-            call_groq(writer=writer, url=url)
+def is_row_lonely(row: list[str]) -> bool:
+    """Checks if a row has a URL in the first cell and is empty otherwise."""
+    if not row or not row[0].strip():
+        return False
+    return all(not cell.strip() for cell in row[1:])
 
 
-def process_and_enrich_csv(
-    input_path="personal_batched_csvs/Enriched_Links2.csv",
-    output_path="personal_batched_csvs/Enriched_Links3.csv",
-):
+def process_and_enrich_csv(input_path: str, output_path: str):
     """
-    Reads input CSV and writes a new CSV with enriched data:
-    - Healthy rows are copied as-is.
-    - Lonely rows are processed using `scrape_link(url)` and replaced.
+    Reads an input CSV, re-processes "lonely" rows (URL only), and writes to a new CSV.
     """
+    in_path = Path(input_path)
+    out_path = Path(output_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    def try_open(encoding):
-        with open(
-            input_path, newline="", encoding=encoding, errors="replace"
-        ) as infile, open(output_path, "w", newline="", encoding="utf-8") as outfile:
-            reader = csv.reader(infile)
-            writer = csv.writer(outfile)
-            for row in reader:
-                # If the row is completely empty, write it as-is
-                if not any(cell.strip() for cell in row):
-                    writer.writerow(row)
-                # Lonely row: first cell has data, rest are empty
-                elif row[0].strip() and all(cell.strip() == "" for cell in row[1:]):
-                    scrape_link(url=row[0].strip(), writer=writer)
-                else:
-                    writer.writerow(row)
+    if not in_path.exists():
+        logging.error(f"Input file not found: {in_path}")
+        return
+
+    naughty_link_bases = get_naughty_link_bases()
+    logging.info("Starting CSV enrichment process...")
 
     try:
-        try_open("utf-8")
-    except UnicodeDecodeError:
-        try_open("ISO-8859-1")
+        # ~line 31
+        with in_path.open(
+            "r", newline="", encoding="utf-8", errors="replace"
+        ) as infile, out_path.open("w", newline="", encoding="utf-8-sig") as outfile:
+
+            reader = csv.reader(infile)
+            writer = csv.writer(outfile)
+
+            # Assuming the header might be missing or different, so we write a standard one
+            # and skip the original header if present.
+            header = next(reader)  # Skip header
+            write_csv_header(writer)
+
+            for i, row in enumerate(reader, 1):
+                if is_row_lonely(row):
+                    url = row[0].strip()
+                    logging.info(f"[Row {i}] Lonely row found. Reprocessing URL: {url}")
+                    result = process_single_url(url, naughty_link_bases)
+                    write_csv_row(writer, result)
+                else:
+                    # Healthy rows are written as-is, assuming they match the new format.
+                    # This part might need adjustment if the input format is very different.
+                    # For now, we write it, but it might not align perfectly.
+                    writer.writerow(row)
+
+        logging.info(f"Enrichment complete. Output saved to {out_path}")
+
+    except Exception as e:
+        logging.error(f"An error occurred during CSV processing: {e}", exc_info=True)
 
 
-process_and_enrich_csv()
+if __name__ == "__main__":
+    INPUT_CSV = "personal_batched_csvs/Enriched_Links_Updated.csv"
+    OUTPUT_CSV = "personal_batched_csvs/Enriched_Links_Re-processed.csv"
+
+    process_and_enrich_csv(INPUT_CSV, OUTPUT_CSV)
