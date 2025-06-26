@@ -166,11 +166,6 @@ def install_playwright_browsers():
             st.toast("✅ Playwright browsers installed successfully!")
             return True
         else:
-            st.error(
-                f"❌ Playwright installation failed with return code: {return_code}"
-            )
-            st.error("Full output:")
-            st.code("\n".join(output_lines))
             return False
 
     except subprocess.CalledProcessError as e:
