@@ -5,3 +5,4 @@ playwright==1.51.0
 playwright-stealth==1.0.6
 setuptools
 google-genai==1.12.1
+backoff
