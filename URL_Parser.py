@@ -10,6 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import html
 from datetime import datetime
+import subprocess
+import sys
 
 # Import refactored processing logic
 from batch_website_scraper import process_urls
@@ -78,13 +80,6 @@ st.markdown(
 # --- Enhanced Functions ---
 
 
-import streamlit as st
-import subprocess
-import sys
-import os
-import logging
-
-
 @st.cache_resource(ttl=3600)  # Cache for 1 hour
 def setup_environment():
     """Setup environment with better error handling and caching"""
@@ -132,8 +127,37 @@ def install_playwright_browsers():
         output_placeholder = st.empty()
 
         # Run playwright install with visible output
-        os.system("playwright install --with-deps > playwright_install.log")
-        st.toast("Playwright installed, proceed")
+        process = subprocess.Popen(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=1,
+        )
+
+        output_lines = []
+        while True:
+            output = process.stdout.readline()
+            if output == "" and process.poll() is not None:
+                break
+            if output:
+                output_lines.append(output.strip())
+                # Show last few lines of output
+                recent_output = "\n".join(output_lines[-10:])
+                output_placeholder.code(recent_output)
+
+        return_code = process.poll()
+
+        if return_code == 0:
+            st.success("✅ Playwright browsers installed successfully!")
+            return True
+        else:
+            st.error(
+                f"❌ Playwright installation failed with return code: {return_code}"
+            )
+            st.error("Full output:")
+            st.code("\n".join(output_lines))
+            return False
 
     except subprocess.CalledProcessError as e:
         st.error(f"❌ Subprocess error during Playwright installation: {e}")
@@ -242,18 +266,33 @@ def setup_for_streamlit_cloud():
         return False
 
 
-def initialize_session_state():
-    """Initialize session state with default values"""
-    defaults = {
-        "scraping_result": None,
-        "processed_file_hash": None,
-        "processing_history": [],
-        "last_processed": None,
-    }
+# Usage - replace your current setup_environment function with this:
+@st.cache_resource(ttl=3600)
+def setup_environment():
+    """Main setup function with fallback strategies"""
+    # Try Streamlit Cloud optimized setup first
+    if setup_for_streamlit_cloud():
+        return True
 
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
+    # Fallback to system dependencies
+    if setup_environment_system_deps():
+        return True
+
+    # Final fallback - show helpful error message
+    st.error(
+        """
+    ❌ **Browser Setup Failed**
+    
+    This app requires browser automation which may not work in Streamlit Community Cloud.
+    
+    **Recommendations:**
+    1. **Run locally**: Clone the repo and run on your machine
+    2. **Use alternative hosting**: Deploy on platforms that support browser automation
+    3. **Contact support**: If this should work, please check the logs
+    """
+    )
+
+    return False
 
 
 def validate_url(url: str) -> bool:
@@ -548,12 +587,6 @@ def main():
     """,
         unsafe_allow_html=True,
     )
-
-    # Setup environment
-    # if not setup_environment():
-    #     st.stop()
-
-    initialize_session_state()
 
     # Sidebar with settings
     with st.sidebar:
