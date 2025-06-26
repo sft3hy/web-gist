@@ -143,8 +143,8 @@ def install_playwright_browsers():
         # Run playwright install with visible output
         process = subprocess.Popen(
             [sys.executable, "-m", "playwright", "install", "chromium"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             universal_newlines=True,
             bufsize=1,
         )
@@ -163,7 +163,7 @@ def install_playwright_browsers():
         return_code = process.poll()
 
         if return_code == 0:
-            st.toast("✅ Playwright browsers installed successfully!")
+            st.success("✅ Playwright browsers installed successfully!")
             return True
         else:
             st.error(
