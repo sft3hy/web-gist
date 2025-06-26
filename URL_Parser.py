@@ -123,58 +123,39 @@ def setup_environment():
 
 
 def install_playwright_browsers():
-    """Install Playwright browsers with proper error handling"""
+    """Install Playwright browsers silently with proper error handling"""
     try:
         # First, try to install playwright itself if not available
         try:
             import playwright
         except ImportError:
-            st.toast("Installing Playwright package...")
             subprocess.check_call(
-                [sys.executable, "-m", "pip", "install", "playwright"]
+                [sys.executable, "-m", "pip", "install", "playwright"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
 
-        # Install browsers with full output visible
-        st.toast("Installing Playwright browsers... this may take a bit")
-
-        # Create a placeholder for real-time output
-        output_placeholder = st.empty()
-
-        # Run playwright install with visible output
-        process = subprocess.Popen(
+        # Install browsers silently
+        process = subprocess.run(
             [sys.executable, "-m", "playwright", "install", "chromium"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            universal_newlines=True,
-            bufsize=1,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=300,  # 5 minute timeout
         )
 
-        # output_lines = []
-        # while True:
-        #     output = process.stdout.readline()
-        #     if output == "" and process.poll() is not None:
-        #         break
-        #     if output:
-        #         output_lines.append(output.strip())
-        #         # Show last few lines of output
-        #         recent_output = "\n".join(output_lines[-10:])
-        #         output_placeholder.code(recent_output)
-
-        return_code = process.poll()
-
-        if return_code == 0:
-            st.toast("✅ Playwright browsers installed successfully!")
+        if process.returncode == 0:
             return True
         else:
             return False
 
+    except subprocess.TimeoutExpired:
+        logging.error("Playwright installation timed out after 5 minutes")
+        return False
     except subprocess.CalledProcessError as e:
-        st.error(f"❌ Subprocess error during Playwright installation: {e}")
-        st.error(f"Output: {e.output}")
+        logging.error(f"Subprocess error during Playwright installation: {e}")
         return False
     except Exception as e:
-        st.error(f"❌ Unexpected error during Playwright installation: {e}")
-        logging.error(f"Playwright installation error: {e}")
+        logging.error(f"Unexpected error during Playwright installation: {e}")
         return False
 
 
