@@ -80,6 +80,20 @@ st.markdown(
 # --- Enhanced Functions ---
 
 
+def initialize_session_state():
+    """Initialize session state with default values"""
+    defaults = {
+        "scraping_result": None,
+        "processed_file_hash": None,
+        "processing_history": [],
+        "last_processed": None,
+    }
+
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+
 @st.cache_resource(ttl=3600)  # Cache for 1 hour
 def setup_environment():
     """Setup environment with better error handling and caching"""
@@ -587,6 +601,12 @@ def main():
     """,
         unsafe_allow_html=True,
     )
+
+    # Setup environment
+    if not setup_environment():
+        st.stop()
+
+    initialize_session_state()
 
     # Sidebar with settings
     with st.sidebar:
