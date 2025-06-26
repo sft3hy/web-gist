@@ -78,6 +78,13 @@ st.markdown(
 # --- Enhanced Functions ---
 
 
+import streamlit as st
+import subprocess
+import sys
+import os
+import logging
+
+
 @st.cache_resource(ttl=3600)  # Cache for 1 hour
 def setup_environment():
     """Setup environment with better error handling and caching"""
@@ -85,15 +92,212 @@ def setup_environment():
         Config.ensure_directories()
 
         if not hasattr(st.session_state, "playwright_installed"):
-            with st.spinner("🔧 Setting up environment (first-time setup)..."):
-                os.system("playwright install --with-deps chromium > /dev/null 2>&1")
-            st.session_state.playwright_installed = True
-            st.toast("✅ Environment setup complete!")
+            with st.spinner(
+                "🔧 Setting up Playwright browsers (this may take a few minutes)..."
+            ):
+                # More robust Playwright installation
+                success = install_playwright_browsers()
+
+            if success:
+                st.session_state.playwright_installed = True
+                st.toast("✅ Environment setup complete!")
+                return True
+            else:
+                st.error("❌ Failed to install Playwright browsers. Please check logs.")
+                return False
 
         return True
     except Exception as e:
-        st.toast(f"❌ Environment setup failed: {str(e)}")
+        st.error(f"❌ Environment setup failed: {str(e)}")
+        logging.error(f"Environment setup error: {e}")
         return False
+
+
+def install_playwright_browsers():
+    """Install Playwright browsers with proper error handling"""
+    try:
+        # First, try to install playwright itself if not available
+        try:
+            import playwright
+        except ImportError:
+            st.info("Installing Playwright package...")
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", "playwright"]
+            )
+
+        # Install browsers with full output visible
+        st.info("Installing Playwright browsers... This may take several minutes.")
+
+        # Create a placeholder for real-time output
+        output_placeholder = st.empty()
+
+        # Run playwright install with visible output
+        process = subprocess.Popen(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=1,
+        )
+
+        output_lines = []
+        while True:
+            output = process.stdout.readline()
+            if output == "" and process.poll() is not None:
+                break
+            if output:
+                output_lines.append(output.strip())
+                # Show last few lines of output
+                recent_output = "\n".join(output_lines[-10:])
+                output_placeholder.code(recent_output)
+
+        return_code = process.poll()
+
+        if return_code == 0:
+            st.success("✅ Playwright browsers installed successfully!")
+            return True
+        else:
+            st.error(
+                f"❌ Playwright installation failed with return code: {return_code}"
+            )
+            st.error("Full output:")
+            st.code("\n".join(output_lines))
+            return False
+
+    except subprocess.CalledProcessError as e:
+        st.error(f"❌ Subprocess error during Playwright installation: {e}")
+        st.error(f"Output: {e.output}")
+        return False
+    except Exception as e:
+        st.error(f"❌ Unexpected error during Playwright installation: {e}")
+        logging.error(f"Playwright installation error: {e}")
+        return False
+
+
+# Alternative approach using system dependencies
+def setup_environment_system_deps():
+    """Alternative setup using system-level dependencies"""
+    try:
+        Config.ensure_directories()
+
+        if not hasattr(st.session_state, "browsers_checked"):
+            with st.spinner("🔧 Checking browser availability..."):
+                # Check if chromium is available in system
+                try:
+                    result = subprocess.run(
+                        ["which", "chromium"], capture_output=True, text=True
+                    )
+                    if result.returncode == 0:
+                        st.info("✅ System Chromium found - using system browser")
+                        st.session_state.browsers_checked = True
+                        st.session_state.use_system_browser = True
+                        return True
+                except:
+                    pass
+
+                # Try to install browsers if system browser not found
+                success = install_playwright_browsers()
+                st.session_state.browsers_checked = True
+                st.session_state.use_system_browser = False
+                return success
+
+        return True
+    except Exception as e:
+        st.error(f"❌ Environment setup failed: {str(e)}")
+        return False
+
+
+# Streamlit Community Cloud specific setup
+def setup_for_streamlit_cloud():
+    """Optimized setup for Streamlit Community Cloud"""
+    try:
+        Config.ensure_directories()
+
+        if not hasattr(st.session_state, "cloud_setup_complete"):
+            st.info("🔧 Setting up for Streamlit Community Cloud...")
+
+            # Check if we're in Streamlit Cloud environment
+            is_cloud = os.getenv("STREAMLIT_CLOUD", False) or "/app/" in os.getcwd()
+
+            if is_cloud:
+                st.warning(
+                    """
+                **Note for Streamlit Community Cloud:**
+                Browser automation may have limitations in the cloud environment. 
+                If you encounter issues, consider:
+                1. Using a different scraping approach
+                2. Running locally for full functionality
+                3. Using alternative data sources
+                """
+                )
+
+            # Try minimal Playwright setup
+            try:
+                with st.spinner("Installing browsers..."):
+                    # Use a more targeted approach
+                    process = subprocess.run(
+                        [
+                            sys.executable,
+                            "-m",
+                            "playwright",
+                            "install",
+                            "chromium",
+                            "--with-deps",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=300,
+                    )  # 5 minute timeout
+
+                    if process.returncode == 0:
+                        st.success("✅ Browsers installed successfully!")
+                        st.session_state.cloud_setup_complete = True
+                        return True
+                    else:
+                        st.error("Browser installation failed:")
+                        st.code(process.stderr)
+                        return False
+
+            except subprocess.TimeoutExpired:
+                st.error("❌ Browser installation timed out")
+                return False
+            except Exception as e:
+                st.error(f"❌ Setup failed: {e}")
+                return False
+
+        return True
+    except Exception as e:
+        st.error(f"❌ Cloud setup failed: {str(e)}")
+        return False
+
+
+# Usage - replace your current setup_environment function with this:
+@st.cache_resource(ttl=3600)
+def setup_environment():
+    """Main setup function with fallback strategies"""
+    # Try Streamlit Cloud optimized setup first
+    if setup_for_streamlit_cloud():
+        return True
+
+    # Fallback to system dependencies
+    if setup_environment_system_deps():
+        return True
+
+    # Final fallback - show helpful error message
+    st.error(
+        """
+    ❌ **Browser Setup Failed**
+    
+    This app requires browser automation which may not work in Streamlit Community Cloud.
+    
+    **Recommendations:**
+    1. **Run locally**: Clone the repo and run on your machine
+    2. **Use alternative hosting**: Deploy on platforms that support browser automation
+    3. **Contact support**: If this should work, please check the logs
+    """
+    )
+
+    return False
 
 
 def initialize_session_state():
