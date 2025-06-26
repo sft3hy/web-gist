@@ -8,7 +8,7 @@ Use this JSON schema:
   "source": "The name of the publication or website (e.g., 'The New York Times', 'BBC')",
   "article_text": "The full readable body of the article, cleaned of irrelevant content like ads, navigation, or boilerplate footers.",
   "published_date": "The original publication date and time. Use format 'YYYY-MM-DDTHH:MM:SS'. If timezone is known, convert to ET.",
-  "updated_date": "The last modified date and time. If not present, use the same value as published_date."
+  "modified_date": "The last modified date and time. If not present, use the same value as published_date."
 }
 ```
 Instructions:

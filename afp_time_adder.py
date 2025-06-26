@@ -65,7 +65,7 @@ def main(input_file: Path, output_file: Path):
                 new_date = extract_afp_datetime(row.get("URL", ""))
                 if new_date:
                     row["published_date"] = new_date
-                    row["updated_date"] = new_date
+                    row["modified_date"] = new_date
 
             writer.writerow(row)
 

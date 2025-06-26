@@ -1,0 +1,2 @@
+﻿url,title,authors,source,published_date,modified_date,llm_used,status,error_message,article_text
+https://www.aljazeera.com/news/liveblog/2025/6/26/live-israel-kills-over-80-in-gaza-3-killed-in-israeli-settler-attack,,,,,,N/A,error_scraping,Failed after 4.29s: 'ArticleInfo' object has no attribute 'modified_date',

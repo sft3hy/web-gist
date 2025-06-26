@@ -51,7 +51,7 @@ Use this JSON schema:
   "source": "...",
   "article_text": "...",
   "published_date": "...",
-  "updated_date": "..."
+  "modified_date": "..."
 }}
 Field Descriptions:
 title (str): The headline or main title of the article, as shown on the page. This should match what a reader would consider the article's title.
@@ -64,7 +64,7 @@ article_text (str): The full readable body of the article. This includes all mea
 
 published_date (str): The original publication date and time of the article, as shown on the page or in embedded metadata. If you are given a time zone, convert it to Eastern Time (ET). A common time zone is Z (zulu), in a time stamp like this: "2025-04-26T16:30:00.000Z" - that corresponds to GMT or UTC, convert that to EDT (in this example it would be 2025-04-26T12:30:00.000). If you are not given a time zone, leave as is. Use this format: "2025-04-23T14:52:05"
 
-updated_date (str): The last modified or updated date and time of the article, if present. If there is no update time, return the same value as published_date.
+modified_date (str): The last modified or updated date and time of the article, if present. If there is no update time, return the same value as published_date.
 
 Instructions:
 Look first in structured data (json ld, OpenGraph tags, and meta tags).
@@ -86,7 +86,7 @@ Example Output:
   "source": "NPR",
   "article_text": "TEL AVIV, Israel — Egypt announced Sunday it would host a summit of Arab leaders later in the month, amid alarm in the region over President Trump's proposals regarding the future of Gaza.\n\nPresident Donald Trump and Israeli Prime Minister Benjamin Netanyahu speak during a news conference in the East Room of the White House on Tuesday.\nMiddle East crisis — explained\nTrump says the U.S. will 'take over' Gaza and relocate its people. What does it mean?\nA statement by the Egyptian foreign ministry says the summit is being called in response to a Palestinian request.\n\nIt said the leaders will gather on Feb. 27 to discuss 'the new and dangerous developments in the Palestinian issue.'\n\nAlso Sunday, Israeli forces began withdrawing from the Netzarim corridor in Gaza, in the latest stage of the ceasefire deal between Israel and Hamas.\n\nThe Netzarim corridor is a four mile strip of land bisecting northern and southern Gaza that Israel fortified during the war, using it as a military zone. Last month, as part of the ceasefire deal, Israel started allowing Palestinians to cross the Netzarim corridor and return to their homes in the North.\n\nThe withdrawal is part of the six week first phase of the ceasefire, in which Hamas is gradually releasing 33 Israeli hostages in exchange for hundreds of Palestinian prisoners and detainees, while allowing aid to Gaza.\n\nIn the next stage of the ceasefire, all remaining living hostages would be released in return for a complete Israeli withdrawal from Gaza, and 'sustainable calm.'\n\nBut negotiations are ongoing on the details. Israel wants Hamas' military and political capabilities eliminated, while Hamas wants all Israeli troops removed from Gaza.\n\nEgypt's announcement of a summit comes less than a week after many Arab states rejected Trump's recent comments about relocating Gaza's residents and creating a \"Riviera of the Middle East\" there, as have Palestinian leaders.\n\nTrump made the proposal Tuesday when he met Israeli Prime Minister Benjamin Netanyahu in Washington D.C. Speaking to reporters at the White House Friday, Trump said he viewed the proposal as \"a real estate transaction, where we'll be an investor in that part of the world.\" He added that he was in \"no rush to do anything.\"\n\nSeveral countries also condemned a suggestion by Israeli Prime Minister Benjamin Netanyahu — that Saudi Arabia has enough land for a Palestinian state.\n\nNetanyahu appeared to be joking in response to a slip by an Israeli TV interviewer, but his words reverberated through the region at a time when tensions are running high.\n\nDisplaced Palestinians making their way back on foot from the southern regions to their homes in the north via Al Rashid Road after the ceasefire agreement in Gaza Strip on January 28, 2025.\nMiddle East crisis — explained\nA brief history of Gaza's tortured role in the Middle East conflict\nAlso on Sunday, there were emotional scenes in Bangkok airport, as five Thai workers who were released after being held hostage for over a year in Gaza arrived back home.\n\n\"We are all very grateful and very happy that we get to return to our homeland. We all would really like to thank you. I don't know what else to say,\" one of the Thai hostages, Pongsak Thaenna, told a news conference at the airport.\n\nThe war in Gaza, sparked by Hamas' attack that killed 1,200 people and saw 250 taken hostage, has killed more than 47,000 Palestinians according to local health authorities.\n\nIn recent days, violence in the West Bank has intensified. On Sunday morning, the Palestinian Health Ministry said a 23-year-old Palestinian woman, who was eight months pregnant, was fatally shot by Israeli gunfire in the Nur Shams urban refugee camp in northern occupied West Bank. The Israeli military said in a statement that it is investigating the incident.",
   "published_date": "2025-02-09T06:13:44",
-  "updated_date": "2025-02-09T06:13:44"
+  "modified_date": "2025-02-09T06:13:44"
 }}
 """
 

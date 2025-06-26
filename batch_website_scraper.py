@@ -47,90 +47,39 @@ def get_naughty_link_bases() -> set[str]:
     return {"/".join(link.split("/")[:3]) for link in urls}
 
 
-def extract_dates_from_soup(soup: BeautifulSoup) -> dict:
-    """Optimized date extraction with early returns."""
-    dates = {"published_date": None, "updated_date": None}
+def has_good_json_ld_dates(json_ld_data: dict) -> bool:
+    """Check if JSON-LD has good date information."""
+    if not json_ld_data:
+        return False
 
-    # Combined selectors for faster processing
-    all_selectors = [
-        (
-            "published",
-            [
-                "meta[property='article:published_time']",
-                "meta[name='pubdate']",
-                "meta[name='sailthru.date']",
-                "meta[property='og:published_time']",
-            ],
-        ),
-        (
-            "modified",
-            [
-                "meta[property='article:modified_time']",
-                "meta[name='lastmod']",
-                "meta[property='og:updated_time']",
-            ],
-        ),
+    # Check for common date fields in JSON-LD
+    date_fields = [
+        "datePublished",
+        "dateModified",
+        "dateCreated",
+        "publishedDate",
+        "modifiedDate",
     ]
-
-    for date_type, selectors in all_selectors:
-        for selector in selectors:
-            tag = soup.select_one(selector)
-            if tag and tag.get("content"):
-                if date_type == "published":
-                    dates["published_date"] = tag["content"].strip()
-                else:
-                    dates["updated_date"] = tag["content"].strip()
-                break
-        if dates[f"{date_type}_date"]:  # Early exit if found
-            break
-
-    # Fallback to time tag if needed
-    if not dates["published_date"] or not dates["updated_date"]:
-        time_tag = soup.find("time")
-        if time_tag and time_tag.get("datetime"):
-            datetime_val = time_tag["datetime"].strip()
-            if not dates["published_date"]:
-                dates["published_date"] = datetime_val
-            elif not dates["updated_date"] and dates["published_date"] != datetime_val:
-                dates["updated_date"] = datetime_val
-
-    return dates
+    return any(json_ld_data.get(field) for field in date_fields)
 
 
 def clean_content_fast(soup: BeautifulSoup) -> str:
     """Faster content cleaning with targeted removal."""
     # Remove unwanted elements in one pass
-    unwanted_selectors = [
-        "script",
-        "style",
-        "nav",
-        "footer",
-        "aside",
-        "form",
-        ".advertisement",
-        ".ad",
-        ".social-share",
-        ".comments",
-        "header",
-        ".header",
-        ".sidebar",
-        ".related-articles",
-    ]
+    unwanted_tags = ["script", "style", "nav", "footer", "aside", "form", "header"]
 
-    for selector in unwanted_selectors:
-        for element in soup.select(selector):
+    for tag_name in unwanted_tags:
+        for element in soup.find_all(tag_name):
             element.decompose()
 
     # Get main content with priority order
     content_candidates = [
         soup.find("article"),
         soup.find("main"),
-        soup.find(class_=re.compile(r"content|article|post", re.I)),
-        soup.find(id=re.compile(r"content|article|post", re.I)),
         soup.body,
     ]
 
-    main_content = next((c for c in content_candidates if c), None)
+    main_content = next((c for c in content_candidates if c), soup)
     if not main_content:
         return ""
 
@@ -148,7 +97,7 @@ def write_csv_header(writer):
             "authors",
             "source",
             "published_date",
-            "updated_date",
+            "modified_date",
             "llm_used",
             "status",
             "error_message",
@@ -168,7 +117,7 @@ def write_csv_row(writer, result: dict):
                 info.authors,
                 info.source,
                 info.published_date,
-                info.updated_date,
+                info.modified_date,
                 result.get("llm_used"),
                 result.get("status"),
                 "",
@@ -250,25 +199,9 @@ def process_single_url_fast(
         html_bytes = scrape_site(url)
         soup = BeautifulSoup(html_bytes, "html.parser")
 
-        # Step 2: Fast parallel extraction
-        status_callback("📊 Extracting metadata...")
-
-        # Run date extraction and JSON-LD extraction concurrently
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            date_future = executor.submit(extract_dates_from_soup, soup)
-            json_future = executor.submit(extract_ld_json_and_article, soup)
-
-            pre_extracted_dates = date_future.result()
-            json_ld_data = json_future.result()
-
-        # Merge JSON-LD dates if available
-        if json_ld_data:
-            json_published = json_ld_data.get("datePublished")
-            json_modified = json_ld_data.get("dateModified")
-            if json_published and not pre_extracted_dates.get("published_date"):
-                pre_extracted_dates["published_date"] = json_published
-            if json_modified and not pre_extracted_dates.get("updated_date"):
-                pre_extracted_dates["updated_date"] = json_modified
+        # Step 2: Extract JSON-LD data
+        status_callback("📊 Extracting JSON-LD metadata...")
+        json_ld_data = extract_ld_json_and_article(soup)
 
         # Step 3: Fast content cleaning
         status_callback("🧹 Cleaning content...")
@@ -284,23 +217,24 @@ def process_single_url_fast(
             "url": url,
             "website_content": fix_mojibake(content_text) if content_text else "",
         }
+
+        # Add JSON-LD if available
         if json_ld_data:
             pass_dict["json_ld"] = json_ld_data
+
+        # If JSON-LD doesn't have good date info, pass raw HTML for date extraction
+        if not has_good_json_ld_dates(json_ld_data):
+            status_callback("📅 No good dates in JSON-LD, including raw HTML...")
+            # Get raw HTML (truncated for LLM efficiency)
+            raw_html = str(soup)[:20000]  # Limit to first 20k chars
+            pass_dict["raw_html_for_dates"] = raw_html
+            logging.info(f"Including raw HTML for date extraction: {url}")
 
         # Step 5: LLM extraction
         status_callback("🤖 Analyzing URL content...")
         logging.info(f"Extracting metadata with Gemini for: {url}")
 
         article_info = gemini_extract_article_info(pass_dict)
-
-        if article_info:
-            # Merge pre-extracted dates (they're usually more accurate)
-            article_info.published_date = (
-                pre_extracted_dates.get("published_date") or article_info.published_date
-            )
-            article_info.updated_date = (
-                pre_extracted_dates.get("updated_date") or article_info.updated_date
-            )
 
         processing_time = time.time() - start_time
         logging.info(f"✅ Processed {url} in {processing_time:.2f}s")

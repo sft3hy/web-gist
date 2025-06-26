@@ -505,7 +505,7 @@ def display_article_results(articles: List[Dict], show_all: bool = True):
             text_preview = fix_mojibake(article_info.article_text or "")
             source = fix_mojibake(article_info.source or "N/A")
             published_date = fix_mojibake(article_info.published_date or "N/A")
-            updated_date = fix_mojibake(article_info.updated_date or "N/A")
+            modified_date = fix_mojibake(article_info.modified_date or "N/A")
 
             # Truncate title for display
             display_title = title[:80] + "..." if len(title) > 80 else title
@@ -530,11 +530,11 @@ def display_article_results(articles: List[Dict], show_all: bool = True):
                 with col2:
                     st.markdown(f"**📅 Published:** {published_date}")
                     if (
-                        updated_date
-                        and updated_date != "N/A"
-                        and updated_date != published_date
+                        modified_date
+                        and modified_date != "N/A"
+                        and modified_date != published_date
                     ):
-                        st.markdown(f"**🔄 Updated:** {updated_date}")
+                        st.markdown(f"**🔄 Updated:** {modified_date}")
                     st.markdown(f"**🤖 LLM:** `{llm_used}`")
                     st.markdown(f"**📊 Source:** {source}")
 

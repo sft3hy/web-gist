@@ -38,21 +38,40 @@ class ArticleInfo(BaseModel):
     published_date: str = Field(
         description="The publication date in ISO 8601 format (YYYY-MM-DD), or 'N/A'."
     )
-    updated_date: str = Field(
-        description="The last updated date in ISO 8601 format (YYYY-MM-DD), or 'N/A'."
+    # Fixed: Changed from modified_date to modified_date to match expected field name
+    modified_date: str = Field(
+        description="The last updated/modified date in ISO 8601 format (YYYY-MM-DD), or 'N/A'.",
+        alias="modified_date",  # Allow both field names for backward compatibility
     )
     article_text: str = Field(
         description="The full, cleaned text content of the article."
     )
 
+    class Config:
+        # Allow population by field name or alias
+        allow_population_by_field_name = True
+
 
 # --- Optimized System Prompt ---
 SYSTEM_PROMPT = f"""Extract article information as JSON. Schema: {ArticleInfo.model_json_schema()}
+
 Rules:
-1. Output ONLY valid JSON, no markdown or comments
-2. Use "N/A" for missing fields
-3. Escape all quotes and special characters properly
-4. Be concise but accurate"""
+1. Output ONLY valid JSON, no markdown, comments, or extra text
+2. Use "N/A" for missing or unavailable fields
+3. Properly escape all quotes and special characters in JSON
+4. For dates, use ISO 8601 format (YYYY-MM-DD) or "N/A"
+5. Use "modified_date" field for last updated/modified date
+6. Be accurate and concise
+
+Example output structure:
+{{
+    "title": "Article Title Here",
+    "authors": "Author Name 1, Author Name 2",
+    "source": "Publication Name",
+    "published_date": "2024-01-15",
+    "modified_date": "2024-01-16", 
+    "article_text": "Full article content here..."
+}}"""
 
 
 # --- Improved Helper Function to Clean LLM Output ---
@@ -92,7 +111,10 @@ def _clean_llm_json_output(raw_string: str) -> str:
             # Fix newlines in strings
             fixed_str = re.sub(
                 r'(?<=: ")(.*?)(?="[,}])',
-                lambda m: m.group(1).replace("\n", "\\n").replace("\r", "\\r"),
+                lambda m: m.group(1)
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t"),
                 fixed_str,
             )
             # Test if it's valid now
@@ -122,7 +144,7 @@ def _clean_llm_json_output(raw_string: str) -> str:
                         "authors": "N/A",
                         "source": "N/A",
                         "published_date": "N/A",
-                        "updated_date": "N/A",
+                        "modified_date": "N/A",  # Fixed: use modified_date consistently
                         "article_text": "Parsing failed - invalid JSON response",
                     }
                 )
@@ -143,8 +165,8 @@ def log_backoff(details):
 @backoff.on_exception(
     backoff.expo,
     (ValidationError, json.JSONDecodeError, Exception),
-    max_tries=3,  # Increased back to 3 for better reliability
-    max_time=90,  # Increased timeout for more attempts
+    max_tries=3,
+    max_time=90,
     on_backoff=log_backoff,
 )
 def gemini_extract_article_info(pass_dict: dict) -> ArticleInfo | None:
@@ -167,7 +189,7 @@ def gemini_extract_article_info(pass_dict: dict) -> ArticleInfo | None:
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 response_mime_type="application/json",
-                response_schema=ArticleInfo.model_json_schema(),  # Enforce schema
+                response_schema=ArticleInfo.model_json_schema(),
             ),
         )
 
@@ -178,6 +200,11 @@ def gemini_extract_article_info(pass_dict: dict) -> ArticleInfo | None:
         try:
             cleaned_json = _clean_llm_json_output(response.text)
             json_data = json.loads(cleaned_json)
+
+            # Handle potential field name variations
+            if "modified_date" in json_data and "modified_date" not in json_data:
+                json_data["modified_date"] = json_data["modified_date"]
+
             article_info = ArticleInfo.model_validate(json_data)
 
             logging.info(f"✓ Extracted info for: {url}")
@@ -195,6 +222,21 @@ def gemini_extract_article_info(pass_dict: dict) -> ArticleInfo | None:
 
     except ValidationError as e:
         logging.error(f"Validation error for {url}: {e}")
+        # Create a fallback object with available data
+        try:
+            # Try to extract what we can from the response
+            if response and response.text:
+                partial_data = {
+                    "title": "N/A",
+                    "authors": "N/A",
+                    "source": "N/A",
+                    "published_date": "N/A",
+                    "modified_date": "N/A",
+                    "article_text": response.text[:1000] + "... [partial]",
+                }
+                return ArticleInfo.model_validate(partial_data)
+        except:
+            pass
         raise
     except Exception as e:
         logging.error(f"Unexpected error for {url}: {e}")
@@ -254,7 +296,7 @@ def gemini_extract_with_timeout(
         raise TimeoutError("Gemini call timed out")
 
     # Set up timeout
-    signal.signal(signal.SIGALRM, timeout_handler)
+    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
     signal.alarm(timeout_seconds)
 
     try:
@@ -269,6 +311,9 @@ def gemini_extract_with_timeout(
         signal.alarm(0)
         logging.error(f"Error processing {pass_dict.get('url', 'unknown')}: {e}")
         return None
+    finally:
+        # Restore original signal handler
+        signal.signal(signal.SIGALRM, old_handler)
 
 
 def ollama_parse_url_metadata(url: str) -> ArticleInfo | None:
