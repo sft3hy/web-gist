@@ -594,13 +594,6 @@ def main():
         max_urls = st.slider("Max URLs to process", 1, Config.MAX_URLS, 20)
         timeout_seconds = st.slider("Timeout per URL (seconds)", 10, 120, 30)
 
-        st.header("📊 Processing History")
-        if st.session_state.processing_history:
-            for i, hist in enumerate(st.session_state.processing_history[-3:], 1):
-                st.write(f"{i}. {hist['timestamp']} - {hist['count']} URLs")
-        else:
-            st.write("No processing history yet")
-
     # Main content
     st.header("📥 Input URLs")
 
@@ -703,13 +696,6 @@ def process_urls_enhanced(urls: List[str], timeout_seconds: int):
 
             # Store results and history
             st.session_state.scraping_result = results
-            st.session_state.processing_history.append(
-                {
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "count": len(urls),
-                    "duration": f"{processing_time:.1f}s",
-                }
-            )
 
             # Clear progress indicators
             progress_bar.progress(1.0)
