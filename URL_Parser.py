@@ -271,35 +271,6 @@ def setup_for_streamlit_cloud():
         return False
 
 
-# Usage - replace your current setup_environment function with this:
-@st.cache_resource(ttl=3600)
-def setup_environment():
-    """Main setup function with fallback strategies"""
-    # Try Streamlit Cloud optimized setup first
-    if setup_for_streamlit_cloud():
-        return True
-
-    # Fallback to system dependencies
-    if setup_environment_system_deps():
-        return True
-
-    # Final fallback - show helpful error message
-    st.error(
-        """
-    ❌ **Browser Setup Failed**
-    
-    This app requires browser automation which may not work in Streamlit Community Cloud.
-    
-    **Recommendations:**
-    1. **Run locally**: Clone the repo and run on your machine
-    2. **Use alternative hosting**: Deploy on platforms that support browser automation
-    3. **Contact support**: If this should work, please check the logs
-    """
-    )
-
-    return False
-
-
 def initialize_session_state():
     """Initialize session state with default values"""
     defaults = {
