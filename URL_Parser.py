@@ -133,6 +133,7 @@ def install_playwright_browsers():
 
         # Run playwright install with visible output
         os.system("playwright install --with-deps > playwright_install.log")
+        st.toast("Playwright installed, proceed")
 
     except subprocess.CalledProcessError as e:
         st.error(f"❌ Subprocess error during Playwright installation: {e}")
