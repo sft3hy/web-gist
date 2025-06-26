@@ -17,7 +17,8 @@ END_ROW = 3865
 
 # Model for extracting metadata from full HTML content.
 # Using a modern, cost-effective, and powerful model is recommended.
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 # Local Ollama model for inferring metadata from a URL string only.
 # This model name MUST match the one defined in your `Modelfile`.
