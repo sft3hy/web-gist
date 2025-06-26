@@ -129,13 +129,13 @@ def install_playwright_browsers():
         try:
             import playwright
         except ImportError:
-            st.info("Installing Playwright package...")
+            st.toast("Installing Playwright package...")
             subprocess.check_call(
                 [sys.executable, "-m", "pip", "install", "playwright"]
             )
 
         # Install browsers with full output visible
-        st.info("Installing Playwright browsers... This may take several minutes.")
+        st.toast("Installing Playwright browsers... this may take a bit")
 
         # Create a placeholder for real-time output
         output_placeholder = st.empty()
@@ -143,8 +143,8 @@ def install_playwright_browsers():
         # Run playwright install with visible output
         process = subprocess.Popen(
             [sys.executable, "-m", "playwright", "install", "chromium"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             universal_newlines=True,
             bufsize=1,
         )
@@ -163,7 +163,7 @@ def install_playwright_browsers():
         return_code = process.poll()
 
         if return_code == 0:
-            st.success("✅ Playwright browsers installed successfully!")
+            st.toast("✅ Playwright browsers installed successfully!")
             return True
         else:
             st.error(
@@ -259,24 +259,24 @@ def setup_for_streamlit_cloud():
                     )  # 5 minute timeout
 
                     if process.returncode == 0:
-                        st.success("✅ Browsers installed successfully!")
+                        st.toast("✅ Browsers installed successfully!")
                         st.session_state.cloud_setup_complete = True
                         return True
                     else:
-                        st.error("Browser installation failed:")
+                        # st.error("Browser installation failed:")
                         st.code(process.stderr)
                         return False
 
             except subprocess.TimeoutExpired:
-                st.error("❌ Browser installation timed out")
+                # st.error("❌ Browser installation timed out")
                 return False
             except Exception as e:
-                st.error(f"❌ Setup failed: {e}")
+                # st.error(f"❌ Setup failed: {e}")
                 return False
 
         return True
     except Exception as e:
-        st.error(f"❌ Cloud setup failed: {str(e)}")
+        # st.error(f"❌ Cloud setup failed: {str(e)}")
         return False
 
 
