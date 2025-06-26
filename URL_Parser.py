@@ -86,7 +86,7 @@ def setup_environment():
 
         if not hasattr(st.session_state, "playwright_installed"):
             with st.spinner("🔧 Setting up environment (first-time setup)..."):
-                os.system("playwright install --with-deps > playwright_install.log")
+                os.system("playwright install --with-deps chromium > /dev/null 2>&1")
             st.session_state.playwright_installed = True
             st.toast("✅ Environment setup complete!")
 
