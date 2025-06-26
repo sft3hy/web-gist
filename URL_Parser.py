@@ -149,21 +149,21 @@ def install_playwright_browsers():
             bufsize=1,
         )
 
-        output_lines = []
-        while True:
-            output = process.stdout.readline()
-            if output == "" and process.poll() is not None:
-                break
-            if output:
-                output_lines.append(output.strip())
-                # Show last few lines of output
-                recent_output = "\n".join(output_lines[-10:])
-                output_placeholder.code(recent_output)
+        # output_lines = []
+        # while True:
+        #     output = process.stdout.readline()
+        #     if output == "" and process.poll() is not None:
+        #         break
+        #     if output:
+        #         output_lines.append(output.strip())
+        #         # Show last few lines of output
+        #         recent_output = "\n".join(output_lines[-10:])
+        #         output_placeholder.code(recent_output)
 
         return_code = process.poll()
 
         if return_code == 0:
-            st.success("✅ Playwright browsers installed successfully!")
+            st.toast("✅ Playwright browsers installed successfully!")
             return True
         else:
             st.error(
@@ -223,7 +223,7 @@ def setup_for_streamlit_cloud():
         Config.ensure_directories()
 
         if not hasattr(st.session_state, "cloud_setup_complete"):
-            st.info("🔧 Setting up for Streamlit Community Cloud...")
+            st.toast("🔧 Setting up for Streamlit Community Cloud...")
 
             # Check if we're in Streamlit Cloud environment
             is_cloud = os.getenv("STREAMLIT_CLOUD", False) or "/app/" in os.getcwd()
